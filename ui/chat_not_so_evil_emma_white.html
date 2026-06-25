@@ -1249,7 +1249,7 @@
         : location.hostname;
 
     const CONFIG = {
-      BASE_URL: `http://${API_HOST}:8000`,
+      BASE_URL: `http://${API_HOST}:8650`,
       HEALTH_ENDPOINT: '/health',
       CHAT_ENDPOINT: '/chat',
       MOCK_MODE: false,
@@ -1608,7 +1608,7 @@
     async function mockReply(messages) {
       await new Promise(r => setTimeout(r, 800 + Math.random() * 700));
       const last = messages[messages.length - 1]?.content || '';
-      return `Got it. Mock response to: *"${last.slice(0, 60)}"*\n\nSet \`MOCK_MODE: false\` and \`BASE_URL\` to connect your local model.\n\`\`\`js\nBASE_URL: 'http://localhost:11434'\n\`\`\``;
+      return `Got it. Mock response to: *"${last.slice(0, 60)}"*\n\nSet \`MOCK_MODE: false\` and use Emma's backend to choose a local model or an external API model.`;
     }
 
     async function checkHealth() {

@@ -24,22 +24,22 @@ if errorlevel 1 (
 
 curl -s http://localhost:11434/api/tags >nul 2>nul
 if errorlevel 1 (
-  echo [warn] Ollama does not seem reachable at http://localhost:11434
-  echo [warn] Emma may start, but chat and indexing will fail until Ollama is running.
+  echo [warn] Local models do not seem reachable at http://localhost:11434
+  echo [warn] Emma can still use external APIs, but local models require the local runtime.
 )
 
 echo [info] Starting Emma server...
-start "Emma Server" cmd /k uvicorn server:app --reload --port 8000
+start "Emma Server" cmd /k uvicorn server:app --reload --port 8650
 
 echo [info] Waiting for backend...
 powershell -NoProfile -Command ^
-  "$ok=$false; for($i=0;$i -lt 30;$i++){ try { Invoke-WebRequest -UseBasicParsing http://localhost:8000/ui/login.html > $null; $ok=$true; break } catch { Start-Sleep -Seconds 1 } }; if(-not $ok){ exit 1 }"
+  "$ok=$false; for($i=0;$i -lt 30;$i++){ try { Invoke-WebRequest -UseBasicParsing http://localhost:8650/ui/login.html > $null; $ok=$true; break } catch { Start-Sleep -Seconds 1 } }; if(-not $ok){ exit 1 }"
 if errorlevel 1 (
   echo [error] Backend did not become ready in time.
   exit /b 1
 )
 
 echo [info] Opening browser...
-start "" http://localhost:8000/ui/login.html
+start "" http://localhost:8650/ui/login.html
 
 exit /b 0

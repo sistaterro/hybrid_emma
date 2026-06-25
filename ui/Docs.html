@@ -668,7 +668,7 @@
       </div>
       <div class="hero-text">
         <h1>Chat <span>Emma</span> Docs</h1>
-        <p>Local-first AI with configurable RAGs, role-based access, LangChain model selection, streaming responses, conflict checks, prompt-injection screening, and audit logs. Your documents stay on your machine; model calls use only the providers you configure.</p>
+        <p>Local-first AI with configurable RAGs, role-based access, LangChain model selection, streaming responses, conflict checks, prompt-injection screening, and audit logs. Your documents stay on your machine; model calls use local models or the external APIs you configure.</p>
       </div>
     </div>
 
@@ -688,7 +688,7 @@
         <div class="feat-card">
           <div class="feat-icon-wrap">LOCK</div>
           <div class="feat-title">Local-first</div>
-          <div class="feat-desc">Documents, chunks, users, conversations, and logs stay local. Generation uses configured provider APIs through LangChain.</div>
+          <div class="feat-desc">Documents, chunks, users, conversations, and logs stay local. Generation uses local models or configured external APIs through LangChain.</div>
           <div class="feat-tag">Local</div>
         </div>
         <div class="feat-card">
@@ -728,7 +728,7 @@
         <table class="fn-table">
           <thead><tr><th>Component</th><th>Technology</th><th>Purpose</th></tr></thead>
           <tbody>
-            <tr><td>LLM integration</td><td>LangChain</td><td>Thin provider boundary for Gemini, OpenAI, and Anthropic chat models</td></tr>
+            <tr><td>LLM integration</td><td>LangChain</td><td>Thin model boundary for local models plus Gemini, OpenAI, and Anthropic external APIs</td></tr>
             <tr><td>RAG chunks</td><td>Local JSON</td><td>Chunked document text stored under <code>chunks/</code></td></tr>
             <tr><td>Backend</td><td>FastAPI</td><td>RAG pipeline and API server</td></tr>
             <tr><td>Frontend</td><td>Vanilla HTML/CSS/JS</td><td>Main chat, Evil Emma chat, document manager, admin, and docs</td></tr>
@@ -759,15 +759,15 @@ source .venv/bin/activate
 
 pip install -r requirements.txt</code></pre>
 
-      <h3>2. Configure provider keys</h3>
-      <p>Create <code>api_keys.json</code> in the repository root. Include only the providers you want to use.</p>
+      <h3>2. Configure external API keys</h3>
+      <p>Create <code>api_keys.json</code> in the repository root. Include only the external APIs you want to use.</p>
       <pre><code>{
   "gemini": { "api_key": "replace-with-your-gemini-api-key" },
   "openai": { "api_key": "replace-with-your-openai-api-key" },
   "anthropic": { "api_key": "replace-with-your-anthropic-api-key" }
 }</code></pre>
 
-      <div class="callout"><strong>Security:</strong> API keys stay server-side. <code>/health</code> can report available providers and models, but it must never return secret values.</div>
+      <div class="callout"><strong>Security:</strong> API keys stay server-side. <code>/health</code> can report available local models and external API models, but it must never return secret values.</div>
     </div>
 
     <div class="divider"></div>
@@ -783,9 +783,9 @@ pip install -r requirements.txt</code></pre>
 
       <h3>Mac / Linux</h3>
       <pre><code>source .venv/bin/activate
-uvicorn server:app --reload --port 8000</code></pre>
+uvicorn server:app --reload --port 8650</code></pre>
 
-      <p>Then open <code>http://localhost:8000/ui/login.html</code> in your browser.</p>
+      <p>Then open <code>http://localhost:8650/ui/login.html</code> in your browser.</p>
 
       <div class="callout"><strong>Windows note:</strong> <code>run.bat</code> validates the local virtual environment, checks core dependencies, waits for FastAPI to respond, and opens the browser.</div>
 
@@ -793,8 +793,8 @@ uvicorn server:app --reload --port 8000</code></pre>
         <table class="fn-table">
           <thead><tr><th>Service</th><th>What runs there</th></tr></thead>
           <tbody>
-            <tr><td>:8000</td><td>FastAPI backend and static UI : auth, admin, chat, conversations, file management, docs</td></tr>
-            <tr><td>Provider APIs</td><td>Gemini, OpenAI, or Anthropic through LangChain, depending on configured keys</td></tr>
+            <tr><td>:8650</td><td>FastAPI backend and static UI : auth, admin, chat, conversations, file management, docs</td></tr>
+            <tr><td>External APIs</td><td>Gemini, OpenAI, or Anthropic through LangChain, depending on configured keys</td></tr>
           </tbody>
         </table>
       </div>
@@ -1012,11 +1012,11 @@ uvicorn server:app --reload --port 8000</code></pre>
     <!-- API ENDPOINTS -->
     <div class="doc-section" id="endpoints">
       <h2>API endpoints</h2>
-      <p class="section-sub">All endpoints are served on port 8000</p>
+      <p class="section-sub">All endpoints are served on port 8650</p>
 
       <h3>Health check</h3>
       <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/health</span></div>
-      <p>Returns backend status and the provider/model catalog derived from configured Gemini, OpenAI, and Anthropic keys. Requires authentication and never exposes secret key values.</p>
+      <p>Returns backend status and the model catalog derived from local model discovery plus configured Gemini, OpenAI, and Anthropic external API keys. Requires authentication and never exposes secret key values.</p>
 
       <h3>Authentication</h3>
       <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/auth/login</span></div>
@@ -1080,7 +1080,7 @@ data: {"text": "", "done": true}</code></pre>
       <p class="section-sub">Adding, reviewing, and removing knowledge</p>
 
       <h3>Adding a document</h3>
-      <p>Open <code>http://localhost:8000/ui/upload.html</code>, drag and drop any <code>.txt</code> file. The server processes it automatically; no restart is needed.</p>
+      <p>Open <code>http://localhost:8650/ui/upload.html</code>, drag and drop any <code>.txt</code> file. The server processes it automatically; no restart is needed.</p>
       <p>During upload, Emma chunks the file, creates a local description, checks for prompt-injection signals, writes suspicious RAG audits when needed, and compares the document against visible RAGs for likely contradictions.</p>
       <p>If the RAG is marked <code>high</code> risk, the upload card shows a red warning that it will not be used by the system. The file remains visible for review or deletion, but chat excludes its chunks from the model prompt.</p>
       <img class="doc-shot" src="assets/conflict.png" alt="Example of Emma detecting a possible inconsistency between uploaded RAG files">
@@ -1124,7 +1124,7 @@ logs/
       <h2>Privacy</h2>
       <p class="section-sub">What stays local and what can be sent to providers</p>
 
-      <p>Emma is local-first, not fully offline. Documents, chunks, users, conversations, indexes, audit logs, and exception logs stay on your machine. When chat or inconsistency detection calls a configured provider, the relevant prompt content is sent to that provider API.</p>
+      <p>Emma is local-first, not necessarily fully offline. Documents, chunks, users, conversations, indexes, audit logs, and exception logs stay on your machine. Local models keep generation on your machine. When chat or inconsistency detection uses a configured external API, the relevant prompt content is sent to that API.</p>
 
       <div class="card-grid">
         <div class="card">

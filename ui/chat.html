@@ -1177,10 +1177,10 @@
       </div>
 
       <div class="model-section">
-        <span class="field-label">AI API</span>
+        <span class="field-label">Model source</span>
         <div class="select-wrap">
           <select id="modelSelect" onchange="onModelChange()">
-            <option value="">Loading APIs...</option>
+            <option value="">Loading models...</option>
           </select>
         </div>
       </div>
@@ -1272,7 +1272,7 @@
         : location.hostname;
 
     const CONFIG = {
-      BASE_URL: `http://${API_HOST}:8000`,  // puerto de FastAPI
+      BASE_URL: `http://${API_HOST}:8650`,  // puerto de FastAPI
       HEALTH_ENDPOINT: '/health',            // endpoint que vos definas
       CHAT_ENDPOINT: '/chat',               // endpoint principal
       MOCK_MODE: false,
@@ -1498,7 +1498,7 @@
       const sel = document.getElementById('modelSelect');
       state.model = sel.value;
       state.modelLabel = sel.selectedOptions[0]?.textContent || state.model;
-      document.getElementById('modelBadge').textContent = state.modelLabel || state.model || 'No API';
+      document.getElementById('modelBadge').textContent = state.modelLabel || state.model || 'No model';
       saveLocal();
     }
 
@@ -1507,7 +1507,7 @@
       const text = ta.value.trim();
       if (!text || state.isGenerating) return;
       if (!state.model) {
-        appendMsg({ id: genId(), role: 'assistant', content: 'No AI API is configured yet.', model: 'Emma' });
+        appendMsg({ id: genId(), role: 'assistant', content: 'No local model or external API is configured yet.', model: 'Emma' });
         return;
       }
       if (!state.activeId) await newConversation();
@@ -1712,7 +1712,7 @@
     async function mockReply(messages) {
       await new Promise(r => setTimeout(r, 800 + Math.random() * 700));
       const last = messages[messages.length - 1]?.content || '';
-      return `Got it. Mock response to: *"${last.slice(0, 60)}"*\n\nSet \`MOCK_MODE: false\` and \`BASE_URL\` to connect your local model.\n\`\`\`js\nBASE_URL: 'http://localhost:11434'\n\`\`\``;
+      return `Got it. Mock response to: *"${last.slice(0, 60)}"*\n\nSet \`MOCK_MODE: false\` and use Emma's backend to choose a local model or an external API model.`;
     }
 
     function renderModelOptions(models) {
@@ -1721,8 +1721,8 @@
       if (!normalized.length) {
         state.model = '';
         state.modelLabel = '';
-        sel.innerHTML = '<option value="">No API configured</option>';
-        document.getElementById('modelBadge').textContent = 'No API';
+        sel.innerHTML = '<option value="">No model configured</option>';
+        document.getElementById('modelBadge').textContent = 'No model';
         return;
       }
 
@@ -1734,8 +1734,10 @@
       state.modelLabel = selected.label || selected.id;
       sel.innerHTML = normalized.map(m => {
         const label = m.label || m.id;
-        const provider = m.provider ? `${m.provider.toUpperCase()} / ` : '';
-        return `<option value="${escHtml(m.id)}" ${m.id === state.model ? 'selected' : ''}>${escHtml(provider + label)}</option>`;
+        const source = m.source_label || (m.source === 'external_apis' ? 'APIs externas' : '');
+        const provider = m.provider && m.provider !== 'local' ? ` / ${m.provider.toUpperCase()}` : '';
+        const prefix = source ? `${source}${provider} / ` : '';
+        return `<option value="${escHtml(m.id)}" ${m.id === state.model ? 'selected' : ''}>${escHtml(prefix + label)}</option>`;
       }).join('');
       document.getElementById('modelBadge').textContent = state.modelLabel;
       saveLocal();

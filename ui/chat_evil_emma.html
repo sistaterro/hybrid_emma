@@ -1364,7 +1364,7 @@
         : location.hostname;
 
     const CONFIG = {
-      BASE_URL: `http://${API_HOST}:8000`,
+      BASE_URL: `http://${API_HOST}:8650`,
       HEALTH_ENDPOINT: '/health',
       CHAT_ENDPOINT: '/chat',
       MOCK_MODE: false,
@@ -1628,7 +1628,7 @@
       const sel = document.getElementById('modelSelect');
       state.model = sel.value;
       state.modelLabel = sel.selectedOptions[0]?.textContent || state.model;
-      document.getElementById('modelBadge').textContent = state.modelLabel || state.model || 'NO API';
+      document.getElementById('modelBadge').textContent = state.modelLabel || state.model || 'NO MODEL';
       saveLocal();
     }
 
@@ -1640,7 +1640,7 @@
       const text = ta.value.trim();
       if (!text || state.isGenerating) return;
       if (!state.model) {
-        appendMsg({ id: genId(), role: 'assistant', content: '// NO AI API CONFIGURED', model: 'EVIL EMMA' });
+        appendMsg({ id: genId(), role: 'assistant', content: '// NO LOCAL MODEL OR EXTERNAL API CONFIGURED', model: 'EVIL EMMA' });
         return;
       }
       if (!state.activeId) await newConversation();
@@ -1911,9 +1911,9 @@
       await new Promise(r => setTimeout(r, 800 + Math.random() * 700));
       const last = messages[messages.length - 1]?.content || '';
       return [
-        `// MOCK RESPONSE\n\nReceived query: *"${last.slice(0, 60)}"*\n\nTo connect a real model, set in CONFIG:\n\`\`\`js\nMOCK_MODE: false\nBASE_URL: 'http://localhost:11434'  // Ollama\n// or\nBASE_URL: 'http://localhost:1234'   // LM Studio\n\`\`\`\n\nActive model: \`${state.model}\``,
+        `// MOCK RESPONSE\n\nReceived query: *"${last.slice(0, 60)}"*\n\nTo connect a real model, use Emma's backend and choose either a local model or an external API model.\n\nActive model: \`${state.model}\``,
         `// PROCESSING COMPLETE\n\nThis interface is running in mock mode.\nAll systems nominal. HAL is watching.\n\nDisable mock mode and point BASE_URL to your local backend to get real LLM responses.`,
-        `// ACKNOWLEDGED\n\nYour message has been received and logged.\n\nTo activate real inference:\n1. Start your local LLM (Ollama / LM Studio)\n2. Set \`MOCK_MODE: false\`\n3. Set \`BASE_URL\` to your backend URL\n\nCurrently selected: \`${state.model}\``,
+        `// ACKNOWLEDGED\n\nYour message has been received and logged.\n\nTo activate real inference:\n1. Start a local model runtime or configure external API keys\n2. Set \`MOCK_MODE: false\`\n3. Set \`BASE_URL\` to your backend URL\n\nCurrently selected: \`${state.model}\``,
       ][Math.floor(Math.random() * 3)];
     }
 
@@ -1926,8 +1926,8 @@
       if (!normalized.length) {
         state.model = '';
         state.modelLabel = '';
-        sel.innerHTML = '<option value="">NO API CONFIGURED</option>';
-        document.getElementById('modelBadge').textContent = 'NO API';
+        sel.innerHTML = '<option value="">NO MODEL CONFIGURED</option>';
+        document.getElementById('modelBadge').textContent = 'NO MODEL';
         return;
       }
 
@@ -1939,8 +1939,10 @@
       state.modelLabel = selected.label || selected.id;
       sel.innerHTML = normalized.map(m => {
         const label = m.label || m.id;
-        const provider = m.provider ? `${m.provider.toUpperCase()} / ` : '';
-        return `<option value="${escAttr(m.id)}" ${m.id === state.model ? 'selected' : ''}>${escHtml(provider + label)}</option>`;
+        const source = m.source_label || (m.source === 'external_apis' ? 'APIS EXTERNAS' : '');
+        const provider = m.provider && m.provider !== 'local' ? ` / ${m.provider.toUpperCase()}` : '';
+        const prefix = source ? `${source.toUpperCase()}${provider} / ` : '';
+        return `<option value="${escAttr(m.id)}" ${m.id === state.model ? 'selected' : ''}>${escHtml(prefix + label)}</option>`;
       }).join('');
       document.getElementById('modelBadge').textContent = state.modelLabel;
       saveLocal();

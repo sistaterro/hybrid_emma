@@ -94,36 +94,48 @@ MODEL_CATALOG = [
         "id": "gemini:gemini-2.5-flash",
         "label": "Gemini 2.5 Flash",
         "provider": "gemini",
+        "source": "external_apis",
+        "source_label": "APIs externas",
         "model": "gemini-2.5-flash",
     },
     {
         "id": "gemini:gemini-2.5-pro",
         "label": "Gemini 2.5 Pro",
         "provider": "gemini",
+        "source": "external_apis",
+        "source_label": "APIs externas",
         "model": "gemini-2.5-pro",
     },
     {
         "id": "openai:gpt-4.1",
         "label": "GPT-4.1",
         "provider": "openai",
+        "source": "external_apis",
+        "source_label": "APIs externas",
         "model": "gpt-4.1",
     },
     {
         "id": "openai:gpt-4.1-mini",
         "label": "GPT-4.1 Mini",
         "provider": "openai",
+        "source": "external_apis",
+        "source_label": "APIs externas",
         "model": "gpt-4.1-mini",
     },
     {
         "id": "anthropic:claude-sonnet-4-5",
         "label": "Claude Sonnet 4.5",
         "provider": "anthropic",
+        "source": "external_apis",
+        "source_label": "APIs externas",
         "model": "claude-sonnet-4-5",
     },
     {
         "id": "anthropic:claude-sonnet-4-0",
         "label": "Claude Sonnet 4",
         "provider": "anthropic",
+        "source": "external_apis",
+        "source_label": "APIs externas",
         "model": "claude-sonnet-4-0",
     },
 ]
@@ -1182,8 +1194,8 @@ def get_provider_key(provider: str) -> str | None:
     return None
 
 
-def fetch_ollama_model_names() -> list[str]:
-    """Return locally installed Ollama model names when Ollama is reachable."""
+def fetch_local_model_names() -> list[str]:
+    """Return locally installed Ollama model names when the local runtime is reachable."""
     try:
         response = httpx.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=OLLAMA_PROBE_TIMEOUT)
         response.raise_for_status()
@@ -1198,21 +1210,24 @@ def fetch_ollama_model_names() -> list[str]:
     return sorted(set(names), key=str.lower)
 
 
-def configured_ollama_model_names() -> list[str]:
-    """Read explicitly configured Ollama model names from the environment."""
+def configured_local_model_names() -> list[str]:
+    """Read explicitly configured local model names from the environment."""
     raw = os.getenv("OLLAMA_MODELS") or os.getenv("EMMA_OLLAMA_MODELS") or ""
     names = [name.strip() for name in raw.split(",") if name.strip()]
     return sorted(set(names), key=str.lower)
 
 
-def ollama_models() -> list[dict]:
-    """Return model catalog entries for local Ollama models."""
-    names = fetch_ollama_model_names() or configured_ollama_model_names()
+def local_models() -> list[dict]:
+    """Return model catalog entries for local models."""
+    names = fetch_local_model_names() or configured_local_model_names()
     return [
         {
-            "id": f"ollama:{name}",
-            "label": f"Ollama {name}",
-            "provider": "ollama",
+            "id": f"local:{name}",
+            "label": f"Local {name}",
+            "provider": "local",
+            "engine": "ollama",
+            "source": "local",
+            "source_label": "Local",
             "model": name,
             "local": True,
         }
@@ -1227,15 +1242,16 @@ def available_models() -> list[dict]:
         for model in MODEL_CATALOG
         if get_provider_key(model["provider"])
     ]
-    return [*remote_models, *ollama_models()]
+    return [*remote_models, *local_models()]
 
 
 def resolve_model(selection: str) -> dict:
     """Resolve a requested model id into a catalog entry."""
-    catalog = [*MODEL_CATALOG, *ollama_models()]
+    catalog = [*MODEL_CATALOG, *local_models()]
     for model in catalog:
-        if selection in {model["id"], model["model"], model["label"]}:
-            if model["provider"] != "ollama" and not get_provider_key(model["provider"]):
+        legacy_local_id = f"ollama:{model['model']}" if model.get("engine") == "ollama" else None
+        if selection in {model["id"], model["model"], model["label"], legacy_local_id}:
+            if model["provider"] != "local" and not get_provider_key(model["provider"]):
                 raise HTTPException(
                     status_code=400,
                     detail=f"API key is not configured for {model['provider']}",
@@ -1269,12 +1285,12 @@ def to_langchain_messages(messages: list[Message]) -> list:
 def make_langchain_chat_model(model: dict):
     """Instantiate the configured LangChain chat model."""
     provider = model["provider"]
-    key = None if provider == "ollama" else get_provider_key(provider)
-    if provider != "ollama" and not key:
+    key = None if provider == "local" else get_provider_key(provider)
+    if provider != "local" and not key:
         raise HTTPException(status_code=400, detail=f"API key is not configured for {provider}")
 
     try:
-        if provider == "ollama":
+        if provider == "local" and model.get("engine") == "ollama":
             from langchain_ollama import ChatOllama
 
             return ChatOllama(
@@ -1916,6 +1932,9 @@ async def health(user: dict = Depends(get_current_user)):
         "status": "ok",
         "models": models,
         "providers": sorted({model["provider"] for model in models}),
+        "sources": sorted({model.get("source", "external_apis") for model in models}),
+        "local_models": [model for model in models if model.get("source") == "local"],
+        "external_api_models": [model for model in models if model.get("source") == "external_apis"],
     }
 
 

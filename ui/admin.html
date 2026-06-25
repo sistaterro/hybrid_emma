@@ -1042,10 +1042,10 @@
             <div class="system-card-title">🖥️ Server status</div>
             <div class="system-row">
               <span class="system-row-label">FastAPI</span>
-              <span class="system-row-value ok">Running · :8000</span>
+              <span class="system-row-value ok">Running · :8650</span>
             </div>
             <div class="system-row">
-              <span class="system-row-label">Ollama</span>
+              <span class="system-row-label">Local models</span>
               <span class="system-row-value ok" id="ollama-status">Connected</span>
             </div>
             <div class="system-row">
@@ -1134,7 +1134,7 @@
 <div id="toast"></div>
 
 <script>
-  const API = 'http://localhost:8000';
+  const API = 'http://localhost:8650';
 
   // ── NAVIGATION ──────────────────────────────────────────
 
@@ -1199,11 +1199,13 @@
     try {
       const res  = await fetch(`${API}/health`);
       const data = await res.json();
-      document.getElementById('ollama-status').textContent  = 'Connected';
-      document.getElementById('current-model').textContent  = data.models?.[0] || '—';
+      const localCount = data.local_models?.length || 0;
+      document.getElementById('ollama-status').textContent  = localCount ? `${localCount} local` : 'Not configured';
+      document.getElementById('ollama-status').className = localCount ? 'system-row-value ok' : 'system-row-value warn';
+      document.getElementById('current-model').textContent  = data.models?.[0]?.label || data.models?.[0]?.id || '---';
       document.getElementById('model-count').textContent    = data.models?.length + ' models' || '—';
     } catch {
-      document.getElementById('ollama-status').textContent = 'Unreachable';
+      document.getElementById('ollama-status').textContent = 'Unavailable';
       document.getElementById('ollama-status').className   = 'system-row-value warn';
     }
 
@@ -1236,7 +1238,7 @@
 
 <script>
   (() => {
-    const API = 'http://localhost:8000';
+    const API = 'http://localhost:8650';
     let currentUser = null;
     let usersCache = [];
 
@@ -1366,11 +1368,13 @@
       try {
         const res = await authFetch('/health');
         const data = await res.json();
-        document.getElementById('ollama-status').textContent = 'Connected';
-        document.getElementById('current-model').textContent = data.models?.[0] || '—';
+        const localCount = data.local_models?.length || 0;
+        document.getElementById('ollama-status').textContent = localCount ? `${localCount} local` : 'Not configured';
+        document.getElementById('ollama-status').className = localCount ? 'system-row-value ok' : 'system-row-value warn';
+        document.getElementById('current-model').textContent  = data.models?.[0]?.label || data.models?.[0]?.id || '---';
         document.getElementById('model-count').textContent = data.models?.length ? `${data.models.length} models` : '—';
       } catch {
-        document.getElementById('ollama-status').textContent = 'Unreachable';
+        document.getElementById('ollama-status').textContent = 'Unavailable';
         document.getElementById('ollama-status').className = 'system-row-value warn';
       }
 

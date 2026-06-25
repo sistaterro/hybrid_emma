@@ -19,12 +19,12 @@ class CoreEndpointTests(unittest.TestCase):
         """Create an isolated runtime workspace for each test."""
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        self.original_fetch_ollama_model_names = self.server.fetch_ollama_model_names
-        self.original_ollama_models_env = {
+        self.original_fetch_local_model_names = self.server.fetch_local_model_names
+        self.original_local_models_env = {
             "OLLAMA_MODELS": self.server.os.environ.pop("OLLAMA_MODELS", None),
             "EMMA_OLLAMA_MODELS": self.server.os.environ.pop("EMMA_OLLAMA_MODELS", None),
         }
-        self.server.fetch_ollama_model_names = lambda: []
+        self.server.fetch_local_model_names = lambda: []
         self.server.DB_PATH = self.root / "emma.db"
         self.server.FILES_ROOT = self.root / "files"
         self.server.CHUNKS_ROOT = self.root / "chunks"
@@ -39,8 +39,8 @@ class CoreEndpointTests(unittest.TestCase):
 
     def tearDown(self):
         """Clean up the isolated runtime workspace after each test."""
-        self.server.fetch_ollama_model_names = self.original_fetch_ollama_model_names
-        for name, value in self.original_ollama_models_env.items():
+        self.server.fetch_local_model_names = self.original_fetch_local_model_names
+        for name, value in self.original_local_models_env.items():
             if value is None:
                 self.server.os.environ.pop(name, None)
             else:
@@ -302,18 +302,23 @@ class CoreEndpointTests(unittest.TestCase):
         data = response.json()
         self.assertEqual(data["providers"], ["gemini"])
         self.assertIn("gemini:gemini-2.5-flash", [model["id"] for model in data["models"]])
+        self.assertEqual(data["sources"], ["external_apis"])
+        self.assertTrue(data["external_api_models"])
         self.assertNotIn("secret-gemini-key", response.text)
 
-    def test_health_reports_local_ollama_models_without_api_keys(self):
-        """Function for test health reports local ollama models without api keys."""
-        self.server.fetch_ollama_model_names = lambda: ["qwen2.5:7b", "llama3.2"]
+    def test_health_reports_local_models_without_api_keys(self):
+        """Function for test health reports local models without api keys."""
+        self.server.fetch_local_model_names = lambda: ["qwen2.5:7b", "llama3.2"]
         token = self.login()
         response = self.client.get("/health", headers=self.auth_headers(token))
         self.assertEqual(response.status_code, 200, response.text)
         data = response.json()
-        self.assertEqual(data["providers"], ["ollama"])
-        self.assertIn("ollama:qwen2.5:7b", [model["id"] for model in data["models"]])
-        self.assertTrue(next(model for model in data["models"] if model["id"] == "ollama:llama3.2")["local"])
+        self.assertEqual(data["providers"], ["local"])
+        self.assertEqual(data["sources"], ["local"])
+        self.assertIn("local:qwen2.5:7b", [model["id"] for model in data["models"]])
+        llama = next(model for model in data["models"] if model["id"] == "local:llama3.2")
+        self.assertTrue(llama["local"])
+        self.assertEqual(llama["source_label"], "Local")
 
     def test_chat_writes_suspicious_audit_log(self):
         """Function for test chat writes suspicious audit log."""

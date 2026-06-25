@@ -2,7 +2,7 @@
 
 Emma is a FastAPI chat application with local RAG storage, user roles, document ingestion, inconsistency detection, prompt-injection screening, audit logs, conversation persistence, and LangChain-backed model generation.
 
-The app keeps documents, chunks, users, conversations, and runtime state on your machine. Model calls go through the providers you configure, such as Gemini, OpenAI, or Anthropic.
+The app keeps documents, chunks, users, conversations, and runtime state on your machine. Model calls can use local models or external APIs you configure, such as Gemini, OpenAI, or Anthropic.
 
 ![Home](assets/home.png)
 
@@ -25,8 +25,8 @@ Current backend capabilities:
 - Local source documents in `files/`.
 - Local JSON chunks in `chunks/`.
 - Conversation persistence and streaming chat responses.
-- LangChain chat model integrations for Gemini, OpenAI, and Anthropic.
-- Backend-provided model catalog based on configured provider keys.
+- LangChain chat model integrations for local models and external APIs.
+- Backend-provided model catalog based on local availability and configured external API keys.
 - Upload-time inconsistency detection persisted in `conflicts_index.json`.
 - Model-based multilingual prompt-injection screening for RAG uploads persisted in `security_index.json`.
 - Suspicious RAG audit logs in `logs/rag_audit/`.
@@ -88,12 +88,13 @@ RAG context that is sent to the model is wrapped with `BEGIN_UNTRUSTED_CONTEXT` 
 
 - Python 3.11+
 - A virtual environment
-- At least one API key for a supported provider:
+- Either a local model runtime or at least one external API key:
+  - Local models through the Ollama-compatible local runtime
   - Gemini
   - OpenAI
   - Anthropic
 
-Ollama is not required for the current rebuilt path.
+External APIs are optional when local models are available.
 
 ---
 
@@ -125,9 +126,9 @@ pip install -r requirements.txt
 
 ---
 
-## Configure API Keys
+## Configure External API Keys
 
-Create a local file named `api_keys.json` in the repository root. This file is ignored by Git and is the recommended place for provider credentials.
+Create a local file named `api_keys.json` in the repository root. This file is ignored by Git and is the recommended place for external API credentials.
 
 Example with fake keys:
 
@@ -145,7 +146,7 @@ Example with fake keys:
 }
 ```
 
-Only include the providers you actually want to use. The backend uses `api_keys.json` to decide which providers and models are available in the UI selector. It never exposes key values to the frontend.
+Only include the external APIs you actually want to use. The backend uses `api_keys.json` plus local model discovery to decide which models are available in the UI selector. It never exposes key values to the frontend.
 
 Environment variables are also supported:
 
@@ -168,13 +169,13 @@ run.bat
 ### Manual Run
 
 ```bash
-python -m uvicorn server:app --reload --port 8000
+python -m uvicorn server:app --reload --port 8650
 ```
 
 Then open:
 
 ```text
-http://localhost:8000/ui/login.html
+http://localhost:8650/ui/login.html
 ```
 
 If the database is empty, the backend bootstraps a default admin user:
@@ -188,13 +189,13 @@ password: admin1234
 
 ## Main Screens
 
-- `http://localhost:8000/ui/login.html` - login screen
-- `http://localhost:8000/ui/index.html` - main home
-- `http://localhost:8000/ui/chat.html` - main Emma chat UI
-- `http://localhost:8000/ui/chat_evil_emma.html` - Evil Emma chat UI with matching backend behavior
-- `http://localhost:8000/ui/upload.html` - RAG management and security status
-- `http://localhost:8000/ui/admin.html` - admin panel
-- `http://localhost:8000/ui/Docs.html` - built-in documentation
+- `http://localhost:8650/ui/login.html` - login screen
+- `http://localhost:8650/ui/index.html` - main home
+- `http://localhost:8650/ui/chat.html` - main Emma chat UI
+- `http://localhost:8650/ui/chat_evil_emma.html` - Evil Emma chat UI with matching backend behavior
+- `http://localhost:8650/ui/upload.html` - RAG management and security status
+- `http://localhost:8650/ui/admin.html` - admin panel
+- `http://localhost:8650/ui/Docs.html` - built-in documentation
 
 The home screen opens main entry cards in a new tab/window for easier navigation. On secondary screens, click the existing Emma logo/status area in the upper sidebar to return to the home screen.
 
@@ -224,7 +225,7 @@ This rebuilt flow intentionally does not use embeddings, `.npy` files, router pr
 
 ## Adding Documents
 
-1. Open `http://localhost:8000/ui/upload.html`.
+1. Open `http://localhost:8650/ui/upload.html`.
 2. Drag and drop a `.txt` file.
 3. The server chunks the document and stores local JSON chunk files.
 4. The server checks the new document for likely prompt injection.
@@ -288,7 +289,7 @@ Local:
 - Audit logs
 - Exception logs
 
-Sent to the configured provider API:
+Sent to a configured external API, when selected:
 
 - The user question
 - Conversation context needed for the request
