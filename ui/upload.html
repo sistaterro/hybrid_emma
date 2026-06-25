@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="assets/emma-favicon.svg">
+  <title>Emma · Upload</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --white: #ffffff;
+      --bg: #f5f5f7;
+      --bg2: #ebebed;
+      --surface: #ffffff;
+      --surface2: #f5f5f7;
+      --border: rgba(0, 0, 0, 0.08);
+      --border2: rgba(0, 0, 0, 0.12);
+      --blue: #0071e3;
+      --blue-light: #e8f1fb;
+      --blue-mid: rgba(0, 113, 227, 0.12);
+      --blue-dim: rgba(0, 113, 227, 0.5);
+      --text: #1d1d1f;
+      --text2: #424245;
+      --text3: #86868b;
+      --text4: #aeaeb2;
+      --green: #34c759;
+      --orange: #ff9500;
+      --red: #ff3b30;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-xs: 6px;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+      --shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+      --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
+      --blur: blur(20px);
+      --sidebar-w: 260px;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, 'Inter', sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #app {
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      height: 100vh;
+    }
+
+    /* ── SIDEBAR ── */
+    #sidebar {
+      display: flex;
+      flex-direction: column;
+      background: rgba(255, 255, 255, 0.72);
+      border-right: 1px solid var(--border);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      overflow: hidden;
+    }
+
+    .hal-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 20px 18px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: 9px;
+      cursor: pointer;
+    }
+
+    .hal-eye {
+      position: relative;
+      width: 48px;
+      height: 48px;
+    }
+
+    .hal-eye .ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 113, 227, 0.15);
+      animation: halRing 4s ease-in-out infinite;
+    }
+
+    .hal-eye .ring2 {
+      position: absolute;
+      inset: 7px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 113, 227, 0.08);
+      animation: halRing 4s ease-in-out infinite 0.8s;
+    }
+
+    .hal-eye .lens {
+      position: absolute;
+      inset: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #5eaeff 0%, #0071e3 35%, #0051a8 70%, #003070 100%);
+      animation: halBreath 4s ease-in-out infinite;
+      box-shadow: 0 0 12px rgba(0, 113, 227, 0.35), 0 0 28px rgba(0, 113, 227, 0.15);
+    }
+
+    .hal-eye .lens::after {
+      content: '';
+      position: absolute;
+      top: 15%;
+      left: 18%;
+      width: 30%;
+      height: 22%;
+      background: radial-gradient(ellipse, rgba(255, 255, 255, 0.55), transparent);
+      border-radius: 50%;
+    }
+
+    @keyframes halBreath {
+
+      0%,
+      100% {
+        box-shadow: 0 0 10px rgba(0, 113, 227, 0.3), 0 0 24px rgba(0, 113, 227, 0.12);
+        transform: scale(1);
+      }
+
+      50% {
+        box-shadow: 0 0 20px rgba(0, 113, 227, 0.55), 0 0 48px rgba(0, 113, 227, 0.22);
+        transform: scale(1.07);
+      }
+    }
+
+    @keyframes halRing {
+
+      0%,
+      100% {
+        opacity: 0.4;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 1;
+        transform: scale(1.06);
+      }
+    }
+
+    .app-logo {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.2px;
+      text-align: center;
+    }
+
+    .app-logo span {
+      color: var(--blue);
+    }
+
+    .hal-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.3px;
+      color: var(--text4);
+      animation: halBreath 4s ease-in-out infinite;
+    }
+
+    /* ── SIDEBAR NAV ── */
+    .nav-section {
+      padding: 10px 8px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--text2);
+      font-size: 13px;
+      font-weight: 400;
+      transition: background 0.12s;
+    }
+
+    .nav-item:hover {
+      background: var(--bg2);
+    }
+
+    .nav-item.active {
+      background: var(--blue-light);
+      color: var(--blue);
+      font-weight: 500;
+    }
+
+    .nav-icon {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .sidebar-footer {
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .footer-id {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text4);
+    }
+
+    /* ── MAIN ── */
+    #main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    .kr-bar {
+      height: 2px;
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+      background: transparent;
+    }
+
+    .kr-bar::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -30%;
+      width: 30%;
+      height: 100%;
+      background: linear-gradient(to right, transparent, var(--blue), transparent);
+      box-shadow: 0 0 8px rgba(0, 113, 227, 0.6);
+      animation: krScan 3s ease-in-out infinite alternate;
+    }
+
+    @keyframes krScan {
+      0% {
+        left: -30%
+      }
+
+      100% {
+        left: 100%
+      }
+    }
+
+    #pageHeader {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.72);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+    }
+
+    .page-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.1px;
+    }
+
+    .meta-tag {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 11px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 20px;
+      color: var(--text2);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* ── CONTENT ── */
+    #content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px 40px;
+    }
+
+    #content::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    #content::-webkit-scrollbar-thumb {
+      background: var(--bg2);
+      border-radius: 2px;
+    }
+
+    .content-inner {
+      max-width: 680px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* ── DROP ZONE ── */
+    .drop-zone {
+      border: 2px dashed var(--border2);
+      border-radius: var(--radius);
+      padding: 48px 32px;
+      text-align: center;
+      background: var(--surface);
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: var(--shadow-sm);
+      position: relative;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      border-color: var(--blue);
+      background: var(--blue-light);
+      box-shadow: var(--shadow), 0 0 0 4px var(--blue-mid);
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      display: block;
+      opacity: 0.4;
+    }
+
+    .drop-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .drop-sub {
+      font-size: 13px;
+      color: var(--text3);
+    }
+
+    .drop-sub span {
+      color: var(--blue);
+      font-weight: 500;
+    }
+
+    /* ── FILE LIST ── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      color: var(--text3);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .file-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-sm);
+      animation: msgIn 0.2s ease forwards;
+    }
+
+    .file-check {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--blue);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    @keyframes msgIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .file-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-xs);
+      background: var(--blue-light);
+      border: 1px solid rgba(0, 113, 227, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .file-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .file-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-meta {
+      font-size: 12px;
+      color: var(--text3);
+      margin-top: 1px;
+    }
+
+    .file-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.ready {
+      background: var(--green);
+      box-shadow: 0 0 6px rgba(52, 199, 89, 0.5);
+    }
+
+    .status-dot.indexing {
+      background: var(--orange);
+      animation: blink 0.9s infinite;
+    }
+
+    .status-dot.pending {
+      background: var(--text4);
+    }
+
+    .status-dot.error {
+      background: var(--red);
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0.3
+      }
+    }
+
+    .status-text.ready {
+      color: var(--green);
+    }
+
+    .status-text.indexing {
+      color: var(--orange);
+    }
+
+    .status-text.pending {
+      color: var(--text4);
+    }
+
+    .status-text.error {
+      color: var(--red);
+    }
+
+    .file-remove {
+      background: none;
+      border: none;
+      color: var(--text4);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 0 4px;
+      border-radius: 4px;
+      line-height: 1;
+      transition: all 0.12s;
+      flex-shrink: 0;
+    }
+
+    .file-remove:hover {
+      color: var(--red);
+      background: rgba(255, 59, 48, 0.08);
+    }
+
+    /* ── PROGRESS BAR ── */
+    .progress-wrap {
+      height: 3px;
+      background: var(--bg2);
+      border-radius: 2px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--blue);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+
+    /* ── UPLOAD BUTTON ── */
+    .upload-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .btn-upload {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 22px;
+      background: var(--blue);
+      border: none;
+      border-radius: 20px;
+      color: white;
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: 0 2px 8px rgba(0, 113, 227, 0.3);
+    }
+
+    .btn-upload:hover:not(:disabled) {
+      background: #0077ed;
+      box-shadow: 0 4px 14px rgba(0, 113, 227, 0.45);
+      transform: translateY(-1px);
+    }
+
+    .btn-upload:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-clear-all {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 18px;
+      background: none;
+      border: 1px solid var(--border2);
+      border-radius: 20px;
+      color: var(--text3);
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-clear-all:hover {
+      color: var(--red);
+      border-color: rgba(255, 59, 48, 0.3);
+      background: rgba(255, 59, 48, 0.05);
+    }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(16px);
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0;
+      transition: all 0.25s;
+      pointer-events: none;
+      z-index: 9999;
+      backdrop-filter: var(--blur);
+      box-shadow: var(--shadow-lg);
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    #toast.success {
+      border-color: rgba(52, 199, 89, 0.3);
+      color: var(--green);
+    }
+
+    #toast.error {
+      border-color: rgba(255, 59, 48, 0.3);
+      color: var(--red);
+    }
+
+    .empty-files {
+      text-align: center;
+      padding: 32px;
+      color: var(--text3);
+      font-size: 13px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    .alert-panel {
+      margin-top: 18px;
+      padding: 16px 18px;
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255, 149, 0, 0.08), rgba(255, 149, 0, 0.03));
+      border: 1px solid rgba(255, 149, 0, 0.22);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .alert-panel h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #8a4b00;
+      margin-bottom: 4px;
+    }
+
+    .alert-panel p {
+      font-size: 12px;
+      color: #8a5a12;
+      margin-bottom: 12px;
+    }
+
+    .alert-group {
+      display: grid;
+      gap: 10px;
+    }
+
+    .alert-item {
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(255, 149, 0, 0.16);
+    }
+
+    .alert-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .alert-tags {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .alert-tag {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      border-radius: 999px;
+      padding: 2px 8px;
+    }
+
+    .alert-tag.scope-user {
+      color: #1a7a3a;
+      background: #edf9f0;
+    }
+
+    .alert-tag.scope-global {
+      color: #0051a8;
+      background: #eaf3ff;
+    }
+
+    .alert-tag.sev-high {
+      color: #9f1d14;
+      background: #ffe9e7;
+    }
+
+    .alert-tag.sev-medium {
+      color: #8a4b00;
+      background: #fff1de;
+    }
+
+    .alert-tag.sev-low {
+      color: #6d5a10;
+      background: #fff8d8;
+    }
+
+    .alert-summary {
+      font-size: 12px;
+      color: var(--text2);
+      margin-bottom: 8px;
+    }
+
+    .alert-claims {
+      display: grid;
+      gap: 8px;
+    }
+
+    .alert-claim {
+      padding-top: 8px;
+      border-top: 1px dashed rgba(0, 0, 0, 0.08);
+      font-size: 12px;
+      color: var(--text2);
+    }
+
+    .alert-claim strong {
+      color: var(--text);
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+      <div class="hal-wrap" onclick="window.location.href='/ui/index.html'" role="link" tabindex="0" title="Home" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.location.href='/ui/index.html';}">
+        <div class="hal-eye">
+          <div class="ring"></div>
+          <div class="ring2"></div>
+          <div class="lens"></div>
+        </div>
+        <div class="app-logo">Chat <span>Emma</span></div>
+        <div class="hal-label">Knowledge Base</div>
+      </div>
+
+      <div class="nav-section">
+        <a class="nav-item" href="chat.html">
+          <span class="nav-icon">💬</span>
+          Chat
+        </a>
+        <a class="nav-item active" href="upload.html">
+          <span class="nav-icon">📂</span>
+          Upload Files
+        </a>
+      </div>
+
+      <div class="sidebar-footer">
+        <span class="footer-id" id="currentUser">…</span>
+        <button class="btn-clear" onclick="logout()" style="font-size:11px;color:var(--red,#ff3b30);background:none;border:none;cursor:pointer;font-family:inherit;">Logout</button>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div id="main">
+      <div class="kr-bar"></div>
+
+      <div id="pageHeader">
+        <div class="page-title">Knowledge Base</div>
+        <div class="header-right">
+          <button class="btn-clear-all" id="selectAllBtn" onclick="selectAllIndexed()" style="display:none;">Select all</button>
+          <button class="btn-clear-all" id="clearSelectionBtn" onclick="clearIndexedSelection()" style="display:none;" disabled>Clear selection</button>
+          <button class="btn-clear-all" id="downloadSelectedBtn" onclick="downloadSelectedFiles()" style="display:none;" disabled>Download selected</button>
+          <button class="btn-clear-all" id="deleteSelectedBtn" onclick="deleteSelectedFiles()" style="display:none;" disabled>Delete selected</button>
+          <button class="btn-clear-all" id="deleteAllTopBtn" onclick="deleteAllFiles()" style="display:none;">Delete all RAGs</button>
+          <span class="meta-tag" id="fileCountTag">0 files</span>
+        </div>
+      </div>
+
+      <div id="content">
+        <div class="content-inner">
+
+          <!-- DROP ZONE -->
+          <div class="drop-zone" id="dropZone">
+            <input type="file" id="fileInput" accept=".txt" multiple>
+            <span class="drop-icon">📄</span>
+            <div class="drop-title">Drop files here</div>
+            <p class="drop-sub">or <span>browse to upload</span> · .txt files only</p>
+          </div>
+
+          <!-- FILE LIST -->
+          <div id="fileListSection" style="display:none">
+            <div class="section-label">Queued files</div>
+            <div class="file-list" id="fileList"></div>
+            <div class="upload-actions" style="margin-top: 16px">
+              <button class="btn-clear-all" onclick="clearAll()">Clear all</button>
+              <div id="scopeWrap" style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--text3);">
+                <span>Upload to:</span>
+                <select id="scopeSelect" style="font-size:12px;border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-family:inherit;cursor:pointer;">
+                  <option value="user">Mine</option>
+                  <option value="global">Global</option>
+                </select>
+              </div>
+              <button class="btn-upload" id="uploadBtn" onclick="uploadAll()">Upload ↑</button>
+            </div>
+          </div>
+
+          <!-- INDEXED FILES -->
+          <div id="indexedSection" style="display:none">
+            <div class="section-label">Indexed files</div>
+            <div class="file-list" id="indexedList"></div>
+          </div>
+
+          <div id="alertsSection" class="alert-panel" style="display:none">
+            <h3>Possible inconsistencies detected</h3>
+            <p>The new RAG may conflict with documents this user can already query. Review before relying on both together.</p>
+            <div id="alertsList" class="alert-group"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    const BASE_URL = 'http://localhost:8000';
+
+    let pendingFiles = [];
+    let currentUser  = null;
+    let uploadAlerts = [];
+    let indexedFilesCache = [];
+    let selectedIndexed = new Set();
+    let conflictPollActive = false;
+
+    function getToken() { return localStorage.getItem('emma_token'); }
+
+    async function authFetch(path, options = {}) {
+      const token = getToken();
+      if (!options.headers) options.headers = {};
+      if (token) options.headers['Authorization'] = `Bearer ${token}`;
+      if (!options.cache) options.cache = 'no-store';
+      const res = await fetch(BASE_URL + path, options);
+      if (res.status === 401) {
+        localStorage.removeItem('emma_token');
+        window.location.href = '/ui/login.html';
+        throw new Error('Unauthorized');
+      }
+      return res;
+    }
+
+    async function logout() {
+      await authFetch('/auth/logout', { method: 'POST' }).catch(() => {});
+      localStorage.removeItem('emma_token');
+      localStorage.removeItem('emma_user');
+      window.location.href = '/ui/login.html';
+    }
+
+    // ── DROP ZONE ──────────────────────────────────────────
+
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const files = [...e.dataTransfer.files].filter(f => f.name.endsWith('.txt'));
+      addFiles(files);
+    });
+
+    fileInput.addEventListener('change', () => {
+      const files = [...fileInput.files].filter(f => f.name.endsWith('.txt'));
+      addFiles(files);
+      fileInput.value = '';
+    });
+
+    // ── FILE MANAGEMENT ────────────────────────────────────
+
+    function addFiles(files) {
+      files.forEach(f => {
+        if (!pendingFiles.find(p => p.name === f.name)) pendingFiles.push(f);
+      });
+      renderPending();
+    }
+
+    function removeFile(name) {
+      pendingFiles = pendingFiles.filter(f => f.name !== name);
+      renderPending();
+    }
+
+    function clearAll() { pendingFiles = []; renderPending(); }
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function getUploadScope() {
+      const sel = document.getElementById('scopeSelect');
+      return sel ? sel.value : 'user';
+    }
+
+    function sanitizeFileName(name) {
+      return String(name || '').trim().toLowerCase().replace(/[^\w.]/g, '_').replace(/_+/g, '_');
+    }
+
+    function hasDuplicateIndexedName(name, scope = getUploadScope()) {
+      const safeName = sanitizeFileName(name);
+      return indexedFilesCache.some(f => f.scope === scope && f.name === safeName);
+    }
+
+    function renderPending() {
+      const section  = document.getElementById('fileListSection');
+      const list     = document.getElementById('fileList');
+      const countTag = document.getElementById('fileCountTag');
+
+      countTag.textContent = pendingFiles.length + (pendingFiles.length === 1 ? ' file' : ' files');
+      if (!pendingFiles.length) { section.style.display = 'none'; return; }
+
+      section.style.display = 'block';
+      list.innerHTML = pendingFiles.map(f => `
+        <div class="file-item" id="item-${CSS.escape(f.name)}">
+          <div class="file-icon">📄</div>
+          <div class="file-info">
+            <div class="file-name">${escHtml(f.name)}</div>
+            <div class="file-meta">${formatSize(f.size)}${hasDuplicateIndexedName(f.name) ? ' · Name already exists' : ''}</div>
+          </div>
+          <div class="file-status">
+            <div class="status-dot pending"></div>
+            <span class="status-text pending">${hasDuplicateIndexedName(f.name) ? 'Will replace' : 'Pending'}</span>
+          </div>
+          <button class="file-remove" onclick="removeFile('${escAttr(f.name)}')">×</button>
+        </div>
+      `).join('');
+    }
+
+    function setItemStatus(name, status, label) {
+      const item = document.getElementById('item-' + CSS.escape(name));
+      if (!item) return;
+      item.querySelector('.status-dot').className = 'status-dot ' + status;
+      const txt = item.querySelector('.status-text');
+      txt.className = 'status-text ' + status;
+      txt.textContent = label;
+    }
+
+    function escAttr(s) {
+      return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
+    function severityRank(sev) {
+      return ({ high: 3, medium: 2, low: 1 }[sev] || 0);
+    }
+
+    function severityLabel(sev) {
+      return (sev || 'medium').toUpperCase();
+    }
+
+    function fileSelectionKey(scope, stem, ownerId = '') {
+      return `${scope}:${ownerId}:${stem}`;
+    }
+
+    function buildOwnerQuery(file) {
+      return file && file.scope === 'user' && file.owner_id ? `?owner_id=${encodeURIComponent(file.owner_id)}` : '';
+    }
+
+    function updateSelectionActions() {
+      const selectAllBtn = document.getElementById('selectAllBtn');
+      const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+      const deleteBtn = document.getElementById('deleteSelectedBtn');
+      const downloadBtn = document.getElementById('downloadSelectedBtn');
+      const count = selectedIndexed.size;
+      const total = indexedFilesCache.length;
+      if (selectAllBtn) {
+        selectAllBtn.style.display = total ? 'inline-flex' : 'none';
+        selectAllBtn.disabled = total === 0 || count === total;
+      }
+      if (clearSelectionBtn) {
+        clearSelectionBtn.style.display = total ? 'inline-flex' : 'none';
+        clearSelectionBtn.disabled = count === 0;
+        clearSelectionBtn.textContent = count ? `Clear selection (${count})` : 'Clear selection';
+      }
+      if (deleteBtn) {
+        deleteBtn.style.display = total ? 'inline-flex' : 'none';
+        deleteBtn.disabled = count === 0;
+        deleteBtn.textContent = count ? `Delete selected (${count})` : 'Delete selected';
+      }
+      if (downloadBtn) {
+        downloadBtn.style.display = total ? 'inline-flex' : 'none';
+        downloadBtn.disabled = count === 0;
+        downloadBtn.textContent = count ? `Download selected (${count})` : 'Download selected';
+      }
+    }
+
+    function toggleIndexedSelection(scope, stem, checked, ownerId = '') {
+      const key = fileSelectionKey(scope, stem, ownerId);
+      if (checked) selectedIndexed.add(key);
+      else selectedIndexed.delete(key);
+      updateSelectionActions();
+    }
+
+    function selectAllIndexed() {
+      selectedIndexed = new Set(indexedFilesCache.map(f => fileSelectionKey(f.scope, f.stem, f.owner_id || '')));
+      renderIndexed(indexedFilesCache);
+      updateSelectionActions();
+    }
+
+    function clearIndexedSelection() {
+      selectedIndexed.clear();
+      renderIndexed(indexedFilesCache);
+      updateSelectionActions();
+    }
+
+    function renderAlerts() {
+      const section = document.getElementById('alertsSection');
+      const list = document.getElementById('alertsList');
+      if (!uploadAlerts.length) {
+        section.style.display = 'none';
+        list.innerHTML = '';
+        return;
+      }
+
+      section.style.display = 'block';
+      list.innerHTML = uploadAlerts.map(alert => {
+        const highest = (alert.matches || []).flatMap(m => m.items || []).sort((a, b) => severityRank(b.severity) - severityRank(a.severity))[0];
+        return `
+          <div class="alert-item">
+            <div class="alert-title">
+              <span>${escHtml(alert.file)}</span>
+              <div class="alert-tags">
+                <span class="alert-tag sev-${(highest && highest.severity) || 'medium'}">${severityLabel(highest && highest.severity)}</span>
+              </div>
+            </div>
+            ${(alert.matches || []).map(match => `
+              <div class="alert-summary">
+                Possible conflict with <strong>${escHtml(match.name)}</strong>
+                <span class="alert-tag scope-${match.scope}">${match.scope === 'global' ? 'GLOBAL' : 'MINE'}</span>
+                ${match.similarity ? `<span style="color:var(--text3)">match ${(match.similarity * 100).toFixed(0)}%</span>` : ''}
+                <div style="margin-top:4px">${escHtml(match.summary || 'Possible factual conflicts detected')}</div>
+              </div>
+              <div class="alert-claims">
+                ${(match.items || []).map(item => `
+                  <div class="alert-claim">
+                    <div><strong>${escHtml(item.topic || 'Possible conflict')}</strong> <span class="alert-tag sev-${item.severity || 'medium'}">${severityLabel(item.severity)}</span></div>
+                    <div><strong>New:</strong> ${escHtml(item.new_claim || '')}</div>
+                    <div><strong>Existing:</strong> ${escHtml(item.existing_claim || '')}</div>
+                  </div>
+                `).join('')}
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function syncAlertsFromIndexed(files) {
+      uploadAlerts = files
+        .filter(f => f.inconsistencies && f.inconsistencies.has_any)
+        .map(f => ({
+          file: f.name,
+          matches: f.inconsistencies.matches || [],
+        }));
+      renderAlerts();
+    }
+
+    function renderConflictDetails(inconsistencies) {
+      if (!inconsistencies || !inconsistencies.has_any) return '';
+      return `
+        <div class="alert-claims" style="margin-top:10px">
+          ${(inconsistencies.matches || []).map(match => `
+            <div class="alert-item" style="box-shadow:none">
+              <div class="alert-title">
+                <span>Conflict with ${escHtml(match.name || 'unknown')}</span>
+                <div class="alert-tags">
+                  <span class="alert-tag scope-${match.scope || 'user'}">${match.scope === 'global' ? 'GLOBAL' : 'MINE'}</span>
+                  ${match.similarity ? `<span class="alert-tag sev-medium">${Math.round(match.similarity * 100)}% match</span>` : ''}
+                </div>
+              </div>
+              <div class="alert-summary">${escHtml(match.summary || 'Possible factual conflicts detected')}</div>
+              ${(match.items || []).map(item => `
+                <div class="alert-claim">
+                  <div><strong>${escHtml(item.topic || 'Possible conflict')}</strong> <span class="alert-tag sev-${item.severity || 'medium'}">${severityLabel(item.severity)}</span></div>
+                  <div><strong>New:</strong> ${escHtml(item.new_claim || '')}</div>
+                  <div><strong>Existing:</strong> ${escHtml(item.existing_claim || '')}</div>
+                </div>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function securityRiskLabel(risk) {
+      return String(risk || 'medium').toUpperCase();
+    }
+
+    function renderHighRiskExclusionNotice(security) {
+      if (!security || !security.has_any || security.risk !== 'high') return '';
+      return `
+        <div class="alert-summary" style="margin-top:8px;color:var(--red);border-color:rgba(255,59,48,.22);background:rgba(255,59,48,.06)">
+          This RAG will not be used by the system because it is considered manipulative and malicious.
+        </div>
+      `;
+    }
+
+    function renderSecurityDetails(security) {
+      if (!security || !security.has_any) return '';
+      return `
+        <div class="alert-claims" style="margin-top:10px">
+          <div class="alert-item" style="box-shadow:none">
+            <div class="alert-title">
+              <span>Possible prompt injection detected</span>
+              <div class="alert-tags">
+                <span class="alert-tag sev-${security.risk || 'medium'}">${securityRiskLabel(security.risk)}</span>
+              </div>
+            </div>
+            <div class="alert-summary">This RAG contains text that looks like instructions to override assistant behavior. It will still be treated as untrusted context during chat.</div>
+            ${(security.matches || []).map(match => `
+              <div class="alert-claim">
+                <div><strong>${escHtml((match.signal || 'prompt_injection').replace(/_/g, ' '))}</strong> <span class="alert-tag sev-${match.severity || 'medium'}">${securityRiskLabel(match.severity)}</span></div>
+                <div>${escHtml(match.excerpt || '')}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function hasPendingConflictChecks(files = indexedFilesCache) {
+      return files.some(f => f.inconsistencies && f.inconsistencies.status === 'checking');
+    }
+
+    async function pollIndexedAfterUpload(attempts = 8, delayMs = 2500) {
+      for (let i = 0; i < attempts; i++) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        await loadIndexed();
+        const hasIndexing = indexedFilesCache.some(f => !f.indexed);
+        const hasCheckingConflicts = hasPendingConflictChecks();
+        const hasConflicts = indexedFilesCache.some(f => f.inconsistencies && f.inconsistencies.has_any);
+        if (!hasIndexing && !hasCheckingConflicts) return;
+        if (!hasIndexing && hasConflicts) return;
+      }
+    }
+
+    function ensureConflictPoll() {
+      if (conflictPollActive || !hasPendingConflictChecks()) return;
+      conflictPollActive = true;
+      (async () => {
+        try {
+          for (let i = 0; i < 12; i++) {
+            await new Promise(resolve => setTimeout(resolve, 2500));
+            await loadIndexed();
+            if (!hasPendingConflictChecks()) break;
+          }
+        } finally {
+          conflictPollActive = false;
+        }
+      })();
+    }
+
+    // ── UPLOAD ─────────────────────────────────────────────
+
+    async function uploadAll() {
+      if (!pendingFiles.length) return;
+      const btn   = document.getElementById('uploadBtn');
+      const scope = getUploadScope();
+      btn.disabled = true;
+      let success = 0, failed = 0;
+      const remainingFiles = [];
+      uploadAlerts = [];
+      renderAlerts();
+
+      for (const file of pendingFiles) {
+        setItemStatus(file.name, 'indexing', 'Uploading…');
+        try {
+          const form = new FormData();
+          form.append('file', file);
+          const res = await authFetch(`/upload?scope=${scope}`, { method: 'POST', body: form });
+          if (res.ok) {
+            const data = await res.json();
+            setItemStatus(file.name, 'indexing', 'Indexing…');
+            if (data.duplicate_name) {
+              showToast(`"${file.name}" replaced an existing ${scope === 'global' ? 'global' : 'personal'} RAG`, 'error');
+            }
+            if (data.inconsistencies && data.inconsistencies.has_any) {
+              uploadAlerts.push({
+                file: file.name,
+                matches: data.inconsistencies.matches || [],
+              });
+              renderAlerts();
+            }
+            if (data.security && data.security.has_any) {
+              showToast(`Detected possible prompt injection in "${file.name}"`, 'error');
+            }
+            success++;
+          } else {
+            setItemStatus(file.name, 'error', 'Error');
+            remainingFiles.push(file);
+            failed++;
+          }
+        } catch (err) {
+          if (err.message !== 'Unauthorized') {
+            setItemStatus(file.name, 'error', 'Error');
+            remainingFiles.push(file);
+            failed++;
+          }
+        }
+      }
+
+      pendingFiles = remainingFiles;
+      renderPending();
+      btn.disabled = false;
+      if (success > 0) {
+        showToast(`${success} file${success > 1 ? 's' : ''} uploaded — indexing in progress`, 'success');
+        pollIndexedAfterUpload();
+      }
+      if (failed > 0)  showToast(`${failed} file${failed > 1 ? 's' : ''} failed to upload`, 'error');
+      if (uploadAlerts.length) showToast(`Detected possible inconsistencies in ${uploadAlerts.length} upload${uploadAlerts.length > 1 ? 's' : ''}`, 'error');
+    }
+
+    // ── INDEXED FILES ──────────────────────────────────────
+
+    async function loadIndexed() {
+      try {
+        const res  = await authFetch('/files');
+        if (!res.ok) return;
+        const data = await res.json();
+        indexedFilesCache = data.files || [];
+        const validKeys = new Set(indexedFilesCache.map(f => fileSelectionKey(f.scope, f.stem, f.owner_id || '')));
+        selectedIndexed = new Set([...selectedIndexed].filter(key => validKeys.has(key)));
+        syncAlertsFromIndexed(data.files || []);
+        renderIndexed(data.files || []);
+        renderPending();
+        updateSelectionActions();
+        ensureConflictPoll();
+      } catch (_) { }
+    }
+
+    function renderIndexed(files) {
+      const section = document.getElementById('indexedSection');
+      const list    = document.getElementById('indexedList');
+      const deleteAllBtn = document.getElementById('deleteAllTopBtn');
+      const selectAllBtn = document.getElementById('selectAllBtn');
+      const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+      const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+      const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
+      if (!files.length) {
+        section.style.display = 'none';
+        if (deleteAllBtn) deleteAllBtn.style.display = 'none';
+        if (selectAllBtn) selectAllBtn.style.display = 'none';
+        if (clearSelectionBtn) clearSelectionBtn.style.display = 'none';
+        if (deleteSelectedBtn) deleteSelectedBtn.style.display = 'none';
+        if (downloadSelectedBtn) downloadSelectedBtn.style.display = 'none';
+        selectedIndexed.clear();
+        updateSelectionActions();
+        return;
+      }
+
+      section.style.display = 'block';
+      if (deleteAllBtn) deleteAllBtn.style.display = 'inline-flex';
+      list.innerHTML = files.map(f => {
+        const scopeBadge = f.scope === 'global'
+          ? `<span style="font-size:10px;background:#e8f1fb;color:#0071e3;border-radius:4px;padding:1px 6px;font-weight:600;">GLOBAL</span>`
+          : `<span style="font-size:10px;background:#f0faf3;color:#34c759;border-radius:4px;padding:1px 6px;font-weight:600;">MINE</span>`;
+        const ownerMeta = f.scope === 'user' && currentUser && currentUser.role === 'admin' && f.owner_username
+          ? escHtml(f.owner_username)
+          : '';
+        const canDelete = f.scope === 'user' || (currentUser && currentUser.role === 'admin');
+        const hasConflicts = !!(f.inconsistencies && f.inconsistencies.has_any);
+        const hasSecurityRisk = !!(f.security && f.security.has_any);
+        const conflictStatus = (f.inconsistencies && f.inconsistencies.status) || 'unchecked';
+        const checkingConflicts = !hasConflicts && conflictStatus === 'checking';
+        const conflictCount = hasConflicts
+          ? (f.inconsistencies.matches || []).reduce((sum, m) => sum + ((m.items || []).length || 0), 0)
+          : 0;
+        const selected = selectedIndexed.has(fileSelectionKey(f.scope, f.stem, f.owner_id || ''));
+        return `
+        <div class="file-item" id="indexed-${f.scope}-${f.stem}">
+          <input class="file-check" type="checkbox" ${selected ? 'checked' : ''} onchange="toggleIndexedSelection('${f.scope}','${f.stem}', this.checked, '${f.owner_id || ''}')" title="Select">
+          <div class="file-icon">📄</div>
+          <div class="file-info">
+            <div class="file-name">${escHtml(f.name)} ${scopeBadge}</div>
+            ${ownerMeta ? `<div class="file-meta" style="margin-top:2px">Owner: ${ownerMeta}</div>` : ''}
+            <div class="file-meta">
+              ${f.chunks} chunks · ${escHtml(f.description || 'No description')}
+              ${hasConflicts ? `<span class="alert-tag sev-medium" style="margin-left:8px">CONFLICTS ${conflictCount}</span>` : ''}
+              ${hasSecurityRisk ? `<span class="alert-tag sev-${f.security.risk || 'medium'}" style="margin-left:8px">PROMPT INJECTION ${securityRiskLabel(f.security.risk)}</span>` : ''}
+              ${checkingConflicts ? `<span class="alert-tag sev-low" style="margin-left:8px">CHECKING CONFLICTS</span>` : ''}
+            </div>
+            ${hasConflicts ? `<div class="alert-summary" style="margin-top:6px">${escHtml((f.inconsistencies.matches || [])[0]?.summary || 'Possible factual conflicts detected')}</div>` : ''}
+            ${hasSecurityRisk ? renderHighRiskExclusionNotice(f.security) : ''}
+            ${hasConflicts ? renderConflictDetails(f.inconsistencies) : ''}
+            ${hasSecurityRisk ? renderSecurityDetails(f.security) : ''}
+            ${f.indexed ? `<div class="progress-wrap"><div class="progress-bar" style="width:100%"></div></div>` : ''}
+          </div>
+          <div class="file-status">
+            <div class="status-dot ${(hasConflicts || hasSecurityRisk) ? 'error' : (checkingConflicts || !f.indexed ? 'indexing' : 'ready')}"></div>
+            <span class="status-text ${(hasConflicts || hasSecurityRisk) ? 'error' : (checkingConflicts || !f.indexed ? 'indexing' : 'ready')}">${hasConflicts ? 'Conflicts' : (hasSecurityRisk ? 'Security' : (checkingConflicts ? 'Checking' : (f.indexed ? 'Ready' : 'Indexing')))}</span>
+          </div>
+          <a class="file-remove" href="${BASE_URL}/files/${f.scope}/${f.stem}/download?token=${getToken()}" download title="Download">↓</a>
+          ${canDelete ? `<button class="file-remove" onclick="deleteFile('${f.scope}','${f.stem}')" title="Delete">×</button>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    async function deleteFile(scope, stem, ownerId = null) {
+      if (!confirm(`Delete "${stem}" and all its indexed data?`)) return;
+      try {
+        if (!ownerId) {
+          const match = indexedFilesCache.find(f => f.scope === scope && f.stem === stem);
+          ownerId = match && match.owner_id ? match.owner_id : null;
+        }
+        const suffix = ownerId ? `?owner_id=${encodeURIComponent(ownerId)}` : '';
+        const res = await authFetch(`/files/${scope}/${encodeURIComponent(stem)}${suffix}`, { method: 'DELETE' });
+        if (res.ok) {
+          document.getElementById(`indexed-${scope}-${stem}`)?.remove();
+          showToast(`"${stem}" deleted`, 'success');
+          loadIndexed();
+        } else {
+          showToast('Error deleting file', 'error');
+        }
+      } catch { showToast('Server unreachable', 'error'); }
+    }
+
+    async function deleteAllFiles(scope = getUploadScope()) {
+      const label = scope === 'global' ? 'all global RAGs' : 'all your RAGs';
+      if (!confirm(`Delete ${label} and all indexed data?`)) return;
+      try {
+        const res = await authFetch(`/files/${scope}`, { method: 'DELETE' });
+        if (res.ok) {
+          showToast(`Deleted ${label}`, 'success');
+          uploadAlerts = [];
+          renderAlerts();
+          await loadIndexed();
+        } else {
+          showToast('Error deleting files', 'error');
+        }
+      } catch {
+        showToast('Server unreachable', 'error');
+      }
+    }
+
+    async function deleteSelectedFiles() {
+      const selectedFiles = indexedFilesCache.filter(f => selectedIndexed.has(fileSelectionKey(f.scope, f.stem, f.owner_id || '')));
+      if (!selectedFiles.length) return;
+      if (!confirm(`Delete ${selectedFiles.length} selected RAG${selectedFiles.length > 1 ? 's' : ''}?`)) return;
+      let deleted = 0;
+      for (const file of selectedFiles) {
+        try {
+          const suffix = file.owner_id ? `?owner_id=${encodeURIComponent(file.owner_id)}` : '';
+          const res = await authFetch(`/files/${file.scope}/${encodeURIComponent(file.stem)}${suffix}`, { method: 'DELETE' });
+          if (res.ok) deleted++;
+        } catch (_) { }
+      }
+      selectedIndexed.clear();
+      updateSelectionActions();
+      await loadIndexed();
+      showToast(`Deleted ${deleted} selected RAG${deleted !== 1 ? 's' : ''}`, deleted ? 'success' : 'error');
+    }
+
+    async function downloadSelectedFiles() {
+      const selectedFiles = indexedFilesCache.filter(f => selectedIndexed.has(fileSelectionKey(f.scope, f.stem, f.owner_id || '')));
+      if (!selectedFiles.length) return;
+      for (const file of selectedFiles) {
+        try {
+          const suffix = file.owner_id ? `?owner_id=${encodeURIComponent(file.owner_id)}` : '';
+          const res = await authFetch(`/files/${file.scope}/${encodeURIComponent(file.stem)}/download${suffix}`);
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = file.name;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        } catch (_) { }
+      }
+      showToast(`Downloaded ${selectedFiles.length} selected RAG${selectedFiles.length > 1 ? 's' : ''}`, 'success');
+    }
+
+    // ── UTILS ──────────────────────────────────────────────
+
+    document.addEventListener('click', async (e) => {
+      const link = e.target.closest('a.file-remove[download]');
+      if (!link) return;
+      const item = link.closest('.file-item');
+      if (!item || !item.id.startsWith('indexed-')) return;
+      e.preventDefault();
+      const parts = item.id.replace('indexed-', '').split('-');
+      const scope = parts.shift();
+      const stem = parts.join('-');
+      const file = indexedFilesCache.find(f => f.scope === scope && f.stem === stem);
+      if (!file) return;
+      try {
+        const suffix = file.owner_id ? `?owner_id=${encodeURIComponent(file.owner_id)}` : '';
+        const res = await authFetch(`/files/${file.scope}/${encodeURIComponent(file.stem)}/download${suffix}`);
+        if (!res.ok) throw new Error();
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (_) {
+        showToast('Error downloading file', 'error');
+      }
+    });
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    let toastTimer;
+    function showToast(msg, type = '') {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'show' + (type ? ' ' + type : '');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { t.className = ''; }, 3000);
+    }
+
+    // ── INIT ───────────────────────────────────────────────
+
+    async function init() {
+      const token = getToken();
+      if (!token) { window.location.href = '/ui/login.html'; return; }
+      const res = await fetch(`${BASE_URL}/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null);
+      if (!res || !res.ok) { localStorage.removeItem('emma_token'); window.location.href = '/ui/login.html'; return; }
+      currentUser = await res.json();
+      if (currentUser.role === 'read_only') {
+        window.location.href = '/ui/index.html';
+        return;
+      }
+
+      // Show user and logout in the sidebar when present.
+      const userEl = document.getElementById('currentUser');
+      if (userEl) userEl.textContent = currentUser.username;
+
+      // Show scope selection only for admins.
+      const scopeWrap = document.getElementById('scopeWrap');
+      if (scopeWrap) scopeWrap.style.display = currentUser.role === 'admin' ? 'flex' : 'none';
+
+      loadIndexed();
+    }
+
+    init();
+  </script>
+</body>
+
+</html>

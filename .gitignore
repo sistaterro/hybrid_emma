@@ -1,0 +1,35 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Runtime database
+emma.db
+
+# Knowledge base - user data, never commit
+files/
+chunks/
+files_index.json
+logs/
+api_keys.json
+api.txt
+openai_api.txt
+anthropic_api.txt
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Source snapshots kept for reference
+Emma-Chat/
+emma_langchain/
