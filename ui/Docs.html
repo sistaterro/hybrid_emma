@@ -682,7 +682,7 @@
       <p>What makes Emma different from a basic chat-with-documents tool is that it also treats the knowledge base itself as something that can be checked. When a new RAG is uploaded, Emma can compare it against the user's existing and visible global RAGs and warn about likely contradictions before those conflicts silently shape future answers.</p>
       <p>Emma can still accept inconsistent RAGs. That is sometimes useful, but it is also risky: contradictory documents can lead to unstable retrieval, misleading grounded answers, or comparisons that depend too much on whichever file was routed first. The inconsistency warning system exists to make that danger visible instead of hiding it.</p>
       <p>Emma is also built to resist manipulation. Chat messages are screened for pressure or false authority, and uploaded RAGs are screened for prompt injection. RAGs marked <code>high</code> risk stay visible for review, but the backend excludes them from chat context.</p>
-      <p>Access is role-based. <code>admin</code> can manage users and all RAGs, <code>user</code> can manage only their own <code>mine</code> RAGs, and <code>read_only</code> can use chat but cannot access upload.</p>
+      <p>Access is role-based. <code>admin</code> can manage users and all RAGs, <code>user</code> can manage only their own <code>mine</code> RAGs, and <code>read_only</code> can use chat but cannot access upload. Admin user management includes username changes, role changes, active-state changes, password resets, and deletion.</p>
 
       <div class="feat-grid">
         <div class="feat-card">
@@ -746,8 +746,8 @@
       <p class="section-sub">Get Emma running in a few minutes</p>
 
       <h3>1. Clone and install</h3>
-      <pre><code>git clone https://github.com/sistaterro/emma_langchain.git
-cd emma_langchain
+      <pre><code>git clone https://github.com/sistaterro/hybrid_emma.git
+cd hybrid_emma
 
 python -m venv .venv
 
@@ -808,7 +808,7 @@ uvicorn server:app --reload --port 8650</code></pre>
       <h2>How RAG works</h2>
       <p class="section-sub">Visible safe context, not top-k retrieval</p>
 
-      <p>RAG grounds the model's answers in uploaded documents instead of relying only on model training data. In the rebuilt Emma 2.0 flow, the backend loads the chunks visible to the authenticated user, filters out high-risk RAGs, and sends a provider prompt only when safe context exists. If no visible safe chunks are available, the backend returns <code>[NO INFO]</code> directly.</p>
+      <p>RAG grounds the model's answers in uploaded documents instead of relying only on model training data. In the rebuilt Emma 2.0 flow, the backend loads the chunks visible to the authenticated user, filters out high-risk RAGs, and sends a model prompt only when safe context exists. If no visible safe chunks are available, the backend returns <code>[NO INFO]</code> directly.</p>
 
       <div class="flow">
         <div class="flow-step">
@@ -843,7 +843,7 @@ uvicorn server:app --reload --port 8650</code></pre>
           <div class="flow-num">5</div>
           <div class="flow-content">
             <div class="flow-title">Streaming generation</div>
-            <div class="flow-desc">The selected Gemini, OpenAI, or Anthropic model generates the answer. When streaming is enabled, the frontend updates the assistant message chunk by chunk.</div>
+            <div class="flow-desc">The selected local model or external API model generates the answer. When streaming is enabled, the frontend updates the assistant message chunk by chunk.</div>
           </div>
         </div>
       </div>
@@ -1031,7 +1031,7 @@ uvicorn server:app --reload --port 8650</code></pre>
       <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/admin/users</span></div>
       <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/admin/users/{id}/reset-password</span></div>
       <div class="endpoint"><span class="method method-delete">DELETE</span><span class="endpoint-path">/admin/users/{id}</span></div>
-      <p>Admin-only endpoints for user management. Admins can create users, update role and active state, reset passwords, and delete users with related local storage.</p>
+      <p>Admin-only endpoints for user management. Admins can create users, rename usernames, update role and active state, reset passwords, and delete users with related local storage.</p>
 
       <h3>List files</h3>
       <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/files</span></div>
@@ -1122,7 +1122,7 @@ logs/
     <!-- PRIVACY -->
     <div class="doc-section" id="privacy">
       <h2>Privacy</h2>
-      <p class="section-sub">What stays local and what can be sent to providers</p>
+      <p class="section-sub">What stays local and what can be sent to external APIs</p>
 
       <p>Emma is local-first, not necessarily fully offline. Documents, chunks, users, conversations, indexes, audit logs, and exception logs stay on your machine. Local models keep generation on your machine. When chat or inconsistency detection uses a configured external API, the relevant prompt content is sent to that API.</p>
 
@@ -1134,13 +1134,13 @@ logs/
         </div>
         <div class="card">
           <span class="card-icon">Keys</span>
-          <div class="card-title">Provider credentials</div>
+          <div class="card-title">External API credentials</div>
           <div class="card-desc"><code>api_keys.json</code> is ignored by Git and used only server-side. Key values are never returned to the frontend.</div>
         </div>
         <div class="card">
           <span class="card-icon">Send</span>
           <div class="card-title">Model calls</div>
-          <div class="card-desc">The selected provider can receive the user question for safety analysis. Final answer generation receives visible safe RAG context only when safe chunks exist; otherwise the backend replies [NO INFO].</div>
+          <div class="card-desc">The selected external API can receive the user question for safety analysis. Final answer generation receives visible safe RAG context only when safe chunks exist; otherwise the backend replies [NO INFO]. Local models keep these calls on your machine.</div>
         </div>
         <div class="card">
           <span class="card-icon">Audit</span>
