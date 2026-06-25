@@ -29,7 +29,3 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
-
-# Source snapshots kept for reference
-Emma-Chat/
-emma_langchain/

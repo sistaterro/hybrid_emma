@@ -1426,6 +1426,8 @@
       editUser: async (username) => {
         const user = usersCache.find(u => u.username === username);
         if (!user) return;
+        const newUsername = prompt('Username', user.username);
+        if (newUsername === null) return;
         const fullName = prompt('Full name', user.full_name || user.username);
         if (fullName === null) return;
         const role = prompt('Role: admin, user, read_only', user.role);
@@ -1433,7 +1435,7 @@
         const res = await authFetch(`/admin/users/${user.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ full_name: fullName, role }),
+          body: JSON.stringify({ username: newUsername, full_name: fullName, role }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -1441,7 +1443,7 @@
           return;
         }
         await loadUsers();
-        showToast(`Updated ${username}`, 'success');
+        showToast(`Updated ${newUsername.trim() || username}`, 'success');
       },
       toggleUser: async (username, enable) => {
         const user = usersCache.find(u => u.username === username);

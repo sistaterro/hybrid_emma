@@ -136,10 +136,23 @@ class CoreEndpointTests(unittest.TestCase):
         update_response = self.client.patch(
             f"/admin/users/{user_id}",
             headers=admin_headers,
-            json={"full_name": "Updated Writer", "role": "read_only", "is_active": True},
+            json={"username": "writer2", "full_name": "Updated Writer", "role": "read_only", "is_active": True},
         )
         self.assertEqual(update_response.status_code, 200, update_response.text)
+        self.assertEqual(update_response.json()["user"]["username"], "writer2")
         self.assertEqual(update_response.json()["user"]["role"], "read_only")
+
+        old_login = self.client.post("/auth/login", json={"username": "writer", "password": "writer1234"})
+        self.assertEqual(old_login.status_code, 401)
+        renamed_token = self.login("writer2", "writer1234")
+        self.assertTrue(renamed_token)
+
+        duplicate_response = self.client.patch(
+            f"/admin/users/{user_id}",
+            headers=admin_headers,
+            json={"username": "admin"},
+        )
+        self.assertEqual(duplicate_response.status_code, 409)
 
         reset_response = self.client.post(
             f"/admin/users/{user_id}/reset-password",
@@ -148,7 +161,7 @@ class CoreEndpointTests(unittest.TestCase):
         )
         self.assertEqual(reset_response.status_code, 200, reset_response.text)
 
-        user_token = self.login("writer", "newpass1234")
+        user_token = self.login("writer2", "newpass1234")
         self.assertTrue(user_token)
 
         delete_response = self.client.delete(f"/admin/users/{user_id}", headers=admin_headers)
@@ -156,7 +169,7 @@ class CoreEndpointTests(unittest.TestCase):
 
         login_deleted = self.client.post(
             "/auth/login",
-            json={"username": "writer", "password": "newpass1234"},
+            json={"username": "writer2", "password": "newpass1234"},
         )
         self.assertEqual(login_deleted.status_code, 401)
 

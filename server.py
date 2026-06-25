@@ -157,6 +157,7 @@ class AdminUserCreate(BaseModel):
 
 class AdminUserUpdate(BaseModel):
     """Request body for updating admin-managed user fields."""
+    username: Optional[str] = None
     full_name: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
@@ -1846,6 +1847,12 @@ async def admin_update_user(
 
     updates = []
     values = []
+    if body.username is not None:
+        username = body.username.strip()
+        if len(username) < 3:
+            raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
+        updates.append("username = ?")
+        values.append(username)
     if body.role is not None:
         role = normalize_role(body.role)
         ensure_admin_survives(target_user_id, new_role=role)
@@ -1862,10 +1869,14 @@ async def admin_update_user(
         raise HTTPException(status_code=400, detail="No changes to apply")
 
     conn = get_db()
-    conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", (*values, target_user_id))
-    if body.is_active is False:
-        conn.execute("DELETE FROM sessions WHERE user_id = ?", (target_user_id,))
-    conn.commit()
+    try:
+        conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", (*values, target_user_id))
+        if body.is_active is False:
+            conn.execute("DELETE FROM sessions WHERE user_id = ?", (target_user_id,))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(status_code=409, detail="That username already exists")
     updated = conn.execute(
         "SELECT id, username, full_name, role, is_active, created_at, last_login_at FROM users WHERE id = ?",
         (target_user_id,),
