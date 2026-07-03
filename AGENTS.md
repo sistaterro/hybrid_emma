@@ -184,6 +184,8 @@ Practical rule:
 - Emma's chat persona belongs in `build_rag_prompt(...)`: she presents herself as an adult woman, uses feminine forms for self-reference when the language requires them, and remains warm, courteous, professional, and free of gender stereotypes. Do not apply this conversational persona to structured safety, RAG-security, or inconsistency-analysis prompts.
 - Keep API keys server-side only. `/health` may report available local models, external API models, providers, and sources, but must never return secret values.
 - Users created by an administrator and users receiving a password reset must have `must_change_password` set. While it is set, backend access is limited to `/auth/me`, `/auth/logout`, and `/auth/change-password`.
+- Password changes require the current password, a different new password of at least eight characters, and invalidation of every other session belonging to that user. Preserve the current bearer session so the UI can continue without another login.
+- `EMMA_MAX_CONTEXT_CHARS` is parsed through `positive_int_setting(...)`. Context admission preserves order, keeps chunks whole, and stops at the first chunk that would exceed the budget. Do not silently truncate chunk text.
 - RAG ingestion writes chunks as JSON only. Embeddings and `.npy` files are not part of the current rebuilt flow.
 - Inconsistency detection is asynchronous and persisted in `conflicts_index.json`.
 - RAG prompt-injection detection is model-based, multilingual, lives in `rag_security.py`, runs during ingestion, and persists results in `security_index.json` next to the RAG files.
@@ -229,13 +231,15 @@ Recommended workflow:
 
 Current automated tests:
 
+- `tests/test_chat_policy.py` covers ordered whole-chunk budgeting, safe environment-setting fallback, common-language detection, and localized deterministic replies.
 - `tests/test_permissions.py` covers role restrictions for admin/file-management behavior.
 - `tests/test_rag_pipeline.py` covers chunk ingestion, file indexes, mocked inconsistency persistence, clean conflict checks, orphaned conflict pruning, chat prompt construction with visible safe chunks, and exclusion of high-risk RAGs from chat context.
-- `tests/test_core_endpoints.py` covers auth, admin user management including username renames, conversation CRUD, file upload/list/download/delete, model catalog behavior, LangChain missing-dependency errors, and `/chat` streaming persistence.
+- `tests/test_core_endpoints.py` covers auth, forced temporary-password replacement, admin user management including username renames, conversation CRUD, file upload/list/download/delete, model catalog behavior, LangChain missing-dependency errors, and `/chat` streaming persistence.
 
 Useful manual smoke tests after changes:
 
 - login with `admin`, `user`, and `read_only`;
+- create a user with a temporary password, confirm protected APIs are blocked, replace it from the login screen, and confirm normal access;
 - correct card visibility in `index.html`;
 - upload and delete of user-owned RAGs;
 - upload two contradictory RAGs and confirm `upload.html` shows conflicts after polling;
@@ -255,7 +259,6 @@ Useful manual smoke tests after changes:
 These debt items may exist consciously and should not be "fixed" without aligning scope first:
 
 - `server.py` remains monolithic;
-- parts of the admin UI may still need cleanup;
 - Startup initialization uses FastAPI lifespan handlers.
 
 ## What To Do When Inheriting This Repo

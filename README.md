@@ -191,6 +191,21 @@ password: admin1234
 Admins can change usernames and reset passwords from the admin panel. If you rename a user, the old username no longer works for login.
 New users and users whose password was reset receive a temporary password. They can authenticate only to replace it, and all other protected endpoints remain blocked until the change is complete. A fresh bootstrap administrator is subject to the same first-use flow; existing databases migrate without unexpectedly locking established accounts.
 
+The login screen handles the required change directly. The API equivalent is:
+
+```http
+POST /auth/change-password
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "current_password": "temporary password",
+  "new_password": "at least 8 characters"
+}
+```
+
+Changing a password clears `must_change_password` and invalidates the user's other active sessions. The current session remains valid.
+
 ---
 
 ## Main Screens
@@ -226,6 +241,8 @@ Response is tagged with [RAG] / [DRIFT] / [NO INFO]
 ```
 
 This rebuilt flow intentionally does not use embeddings, `.npy` files, router prompts, or relevance-based top-k retrieval. Ordered visible safe chunks are admitted whole until the `EMMA_MAX_CONTEXT_CHARS` budget is reached; the default is 60,000 characters. When no visible safe chunks fit or exist, Emma does not ask the provider to answer from general knowledge; the backend returns a deterministic localized `[NO INFO]` response.
+
+The budget preserves source and chunk order and never splits a chunk. Set `EMMA_MAX_CONTEXT_CHARS` before startup to tune the limit for the context window of the local or external models in use. Invalid and non-positive values fall back to the default.
 
 ---
 
@@ -322,7 +339,7 @@ Or run unit tests directly:
 python -m unittest discover tests
 ```
 
-The tests mock provider calls and focus on backend behavior, permissions, RAG ingestion, conflict persistence, RAG safety filtering, streaming, and conversation functionality.
+The tests mock provider calls and focus on backend behavior, permissions, temporary-password enforcement, context budgeting, localized deterministic replies, RAG ingestion, conflict persistence, RAG safety filtering, streaming, and conversation functionality.
 
 ---
 

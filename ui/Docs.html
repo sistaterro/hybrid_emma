@@ -809,6 +809,7 @@ uvicorn server:app --reload --port 8650</code></pre>
       <p class="section-sub">Bounded visible safe context, not relevance-based top-k retrieval</p>
 
       <p>RAG grounds the model's answers in uploaded documents instead of relying only on model training data. In the rebuilt Emma 2.0 flow, the backend loads the chunks visible to the authenticated user, filters out high-risk RAGs, and sends a model prompt only when safe context exists. If no visible safe chunks are available, the backend returns <code>[NO INFO]</code> directly.</p>
+      <p>Safe chunks retain their source order and are admitted whole until <code>EMMA_MAX_CONTEXT_CHARS</code> is reached. The default budget is 60,000 characters. Invalid or non-positive settings fall back to that default, and chunks are never split merely to fill the remaining budget.</p>
 
       <div class="flow">
         <div class="flow-step">
@@ -1027,14 +1028,14 @@ uvicorn server:app --reload --port 8650</code></pre>
       <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/auth/me</span></div>
       <p>Returns the authenticated user profile, role, active state, and password-change requirement.</p>
       <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/auth/change-password</span></div>
-      <p>Replaces a temporary password. Accounts marked for password change can use only session inspection, logout, and this endpoint until the requirement is cleared.</p>
+      <p>Accepts <code>current_password</code> and <code>new_password</code>. The new password must contain at least eight characters and differ from the current one. Accounts marked for password change can use only session inspection, logout, and this endpoint until the requirement is cleared. A successful change keeps the current session and invalidates the user's other sessions.</p>
 
       <h3>Admin users</h3>
       <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/admin/users</span></div>
       <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/admin/users</span></div>
       <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/admin/users/{id}/reset-password</span></div>
       <div class="endpoint"><span class="method method-delete">DELETE</span><span class="endpoint-path">/admin/users/{id}</span></div>
-      <p>Admin-only endpoints for user management. Admins can create users, rename usernames, update role and active state, set temporary passwords, and delete users with related local storage.</p>
+      <p>Admin-only endpoints for user management. Admins can create users, rename usernames, update role and active state, set temporary passwords, and delete users with related local storage. The user table labels active accounts awaiting replacement as <code>Temporary password</code>; edit and reset actions use in-app modals.</p>
 
       <h3>List files</h3>
       <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/files</span></div>
