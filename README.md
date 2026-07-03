@@ -26,6 +26,7 @@ Current backend capabilities:
 - Local source documents in `files/`.
 - Local JSON chunks in `chunks/`.
 - Conversation persistence and streaming chat responses.
+- A consistent warm, courteous, professional feminine voice for Emma's chat answers.
 - LangChain chat model integrations for local models and external APIs.
 - Backend-provided model catalog based on local availability and configured external API keys.
 - Upload-time inconsistency detection persisted in `conflicts_index.json`.
@@ -326,6 +327,7 @@ The tests mock provider calls and focus on backend behavior, permissions, RAG in
 
 - `server.py` is still the active backend boundary and remains monolithic.
 - `prompts.py` is the canonical place for active prompt builders.
+- Emma's conversational persona is defined in `build_rag_prompt(...)`: she presents herself as an adult woman and uses feminine self-reference without stereotypes.
 - Python classes, functions, and async functions are expected to have concise docstrings. New implementation work should add or update docstrings alongside the code change.
 - Startup initialization uses FastAPI lifespan handlers.
 - RAG ingestion writes JSON chunks only.

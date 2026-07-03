@@ -176,6 +176,7 @@ Practical rule:
 - Do not introduce empty abstractions such as managers or state-less classes if simple functions are enough.
 - If adding LangChain or LangGraph, keep framework integration behind a thin internal boundary so endpoint code remains easy to read and test.
 - Model generation should go through `generate_ai_reply(...)` and the LangChain model factory. Do not call external provider REST APIs directly from endpoint code.
+- Emma's chat persona belongs in `build_rag_prompt(...)`: she presents herself as an adult woman, uses feminine forms for self-reference when the language requires them, and remains warm, courteous, professional, and free of gender stereotypes. Do not apply this conversational persona to structured safety, RAG-security, or inconsistency-analysis prompts.
 - Keep API keys server-side only. `/health` may report available local models, external API models, providers, and sources, but must never return secret values.
 - RAG ingestion writes chunks as JSON only. Embeddings and `.npy` files are not part of the current rebuilt flow.
 - Inconsistency detection is asynchronous and persisted in `conflicts_index.json`.
