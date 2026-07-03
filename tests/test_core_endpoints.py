@@ -35,6 +35,10 @@ class CoreEndpointTests(unittest.TestCase):
         self.server.EXCEPTION_LOG_DIR = self.root / "logs" / "exception_log"
         self.server.API_KEYS_PATH = self.root / "api_keys.json"
         self.server.init_db()
+        conn = self.server.get_db()
+        conn.execute("UPDATE users SET must_change_password = 0 WHERE username = 'admin'")
+        conn.commit()
+        conn.close()
         self.client = TestClient(self.server.app)
 
     def tearDown(self):
@@ -386,6 +390,37 @@ class CoreEndpointTests(unittest.TestCase):
         finally:
             self.server.resolve_model = original_resolve
             self.server.generate_ai_reply = original_generate
+
+    def test_temporary_password_requires_change_before_app_access(self):
+        """New users should replace temporary passwords before using protected APIs."""
+        admin_token = self.login()
+        created = self.client.post(
+            "/admin/users",
+            headers=self.auth_headers(admin_token),
+            json={"username": "newcomer", "password": "temporary123", "role": "user"},
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        self.assertTrue(created.json()["user"]["must_change_password"])
+
+        login = self.client.post(
+            "/auth/login",
+            json={"username": "newcomer", "password": "temporary123"},
+        )
+        self.assertEqual(login.status_code, 200, login.text)
+        self.assertTrue(login.json()["user"]["must_change_password"])
+        headers = self.auth_headers(login.json()["token"])
+        blocked = self.client.get("/conversations", headers=headers)
+        self.assertEqual(blocked.status_code, 403, blocked.text)
+        self.assertEqual(blocked.json()["detail"], "Password change required")
+
+        changed = self.client.post(
+            "/auth/change-password",
+            headers=headers,
+            json={"current_password": "temporary123", "new_password": "permanent123"},
+        )
+        self.assertEqual(changed.status_code, 200, changed.text)
+        allowed = self.client.get("/conversations", headers=headers)
+        self.assertEqual(allowed.status_code, 200, allowed.text)
 
     def test_chat_does_not_write_safe_audit_log(self):
         """Function for test chat does not write safe audit log."""

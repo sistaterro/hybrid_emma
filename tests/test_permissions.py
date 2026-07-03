@@ -49,6 +49,10 @@ class PermissionSmokeTests(unittest.TestCase):
         self.server.GLOBAL_CHUNKS_DIR = self.server.CHUNKS_ROOT / "global"
 
         self.server.init_db()
+        conn = self.server.get_db()
+        conn.execute("UPDATE users SET must_change_password = 0 WHERE username = 'admin'")
+        conn.commit()
+        conn.close()
         self.client = TestClient(self.server.app)
 
     def tearDown(self):

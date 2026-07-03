@@ -13,12 +13,13 @@ from typing import List, Optional
 import bcrypt
 import httpx
 import rag_security
-from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from chat_policy import DEFAULT_MAX_CONTEXT_CHARS, bounded_context_chunks, no_info_reply, positive_int_setting
 from prompts import build_inconsistency_prompt, build_rag_prompt, build_safety_prompt
 
 
@@ -79,6 +80,7 @@ GLOBAL_FILES_DIR = FILES_ROOT / "global"
 GLOBAL_CHUNKS_DIR = CHUNKS_ROOT / "global"
 CHUNK_MIN_WORDS = 40
 CHUNK_MAX_CHARS = 4000
+MAX_RAG_CONTEXT_CHARS = positive_int_setting(os.getenv("EMMA_MAX_CONTEXT_CHARS"), DEFAULT_MAX_CONTEXT_CHARS)
 API_KEYS_PATH = Path("api_keys.json")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 LEGACY_API_KEY_FILES = {
@@ -168,6 +170,12 @@ class AdminPasswordReset(BaseModel):
     password: str
 
 
+class PasswordChangeRequest(BaseModel):
+    """Request body for replacing a temporary password."""
+    current_password: str
+    new_password: str
+
+
 class ConversationCreate(BaseModel):
     """Request body for creating a conversation."""
     title: str = "New chat"
@@ -241,6 +249,7 @@ def init_db() -> None:
             role          TEXT NOT NULL DEFAULT 'user',
             full_name     TEXT,
             is_active     INTEGER NOT NULL DEFAULT 1,
+            must_change_password INTEGER NOT NULL DEFAULT 1,
             last_login_at TEXT,
             created_at    TEXT NOT NULL
         )
@@ -284,13 +293,14 @@ def init_db() -> None:
     ensure_column(conn, "users", "full_name", "TEXT")
     ensure_column(conn, "users", "is_active", "INTEGER NOT NULL DEFAULT 1")
     ensure_column(conn, "users", "last_login_at", "TEXT")
+    ensure_column(conn, "users", "must_change_password", "INTEGER NOT NULL DEFAULT 0")
     conn.commit()
 
     count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     if count == 0:
         conn.execute(
-            "INSERT INTO users (username, password_hash, role, full_name, is_active, created_at) "
-            "VALUES (?, ?, 'admin', ?, 1, ?)",
+            "INSERT INTO users (username, password_hash, role, full_name, is_active, must_change_password, created_at) "
+            "VALUES (?, ?, 'admin', ?, 1, 1, ?)",
             ("admin", hash_password("admin1234"), "Administrator", datetime.utcnow().isoformat()),
         )
         conn.commit()
@@ -313,7 +323,7 @@ def get_user_row(user_id: int) -> sqlite3.Row | None:
     """Fetch a user row by id."""
     conn = get_db()
     row = conn.execute(
-        "SELECT id, username, full_name, role, is_active, created_at, last_login_at "
+        "SELECT id, username, full_name, role, is_active, must_change_password, created_at, last_login_at "
         "FROM users WHERE id = ?",
         (user_id,),
     ).fetchone()
@@ -329,6 +339,7 @@ def serialize_user_row(row: sqlite3.Row) -> dict:
         "full_name": row["full_name"] or row["username"],
         "role": normalize_role(row["role"]),
         "is_active": bool(row["is_active"]),
+        "must_change_password": bool(row["must_change_password"]),
         "created_at": row["created_at"],
         "last_login_at": row["last_login_at"],
     }
@@ -900,7 +911,7 @@ async def visible_chat_chunk_sources(user: dict, model: dict | None = None) -> l
 
 
 async def load_visible_context_chunks(user: dict, model: dict | None = None) -> list[dict]:
-    """Load all visible safe chunks for chat prompt construction."""
+    """Load ordered visible safe chunks within the configured chat budget."""
     context_chunks = []
     for source in await visible_chat_chunk_sources(user, model):
         for chunk in load_chunk_file(source["chunks_dir"], source["stem"]):
@@ -915,11 +926,11 @@ async def load_visible_context_chunks(user: dict, model: dict | None = None) -> 
                     "text": text,
                 }
             )
-    return context_chunks
+    return bounded_context_chunks(context_chunks, MAX_RAG_CONTEXT_CHARS)
 
 
-def build_chat_messages_with_all_visible_chunks(req: ChatRequest, user: dict, context_chunks: list[dict] | None = None) -> list[Message]:
-    """Build chat messages with the full visible safe RAG context."""
+def build_chat_messages_with_visible_context(req: ChatRequest, context_chunks: list[dict] | None = None) -> list[Message]:
+    """Build chat messages with the bounded visible safe RAG context."""
     if not req.messages:
         raise HTTPException(status_code=400, detail="No messages to answer")
     question = req.messages[-1].content.strip()
@@ -1536,26 +1547,7 @@ def ensure_response_tag(text: str, context_chunks: list[dict]) -> str:
 
 def build_no_info_reply(question: str) -> str:
     """Build a deterministic no-context reply in the user's likely language."""
-    spanish_markers = {
-        "como",
-        "cual",
-        "cuál",
-        "cuando",
-        "cuándo",
-        "donde",
-        "dónde",
-        "hola",
-        "nació",
-        "porque",
-        "por qué",
-        "qué",
-        "quien",
-        "quién",
-    }
-    normalized = question.lower()
-    if "¿" in question or any(marker in normalized for marker in spanish_markers):
-        return "[NO INFO]\nNo tengo información en los documentos disponibles para responder eso."
-    return "[NO INFO]\nI do not have information in the available documents to answer that."
+    return no_info_reply(question)
 
 
 async def stream_static_chat_reply_as_json_lines(
@@ -1682,6 +1674,7 @@ def append_file_entries(
 
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ):
     """Resolve the bearer token into an active current user."""
@@ -1689,7 +1682,7 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Not authenticated")
     conn = get_db()
     row = conn.execute(
-        "SELECT u.id, u.username, u.role, u.full_name, u.is_active "
+        "SELECT u.id, u.username, u.role, u.full_name, u.is_active, u.must_change_password "
         "FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token = ?",
         (credentials.credentials,),
     ).fetchone()
@@ -1698,11 +1691,15 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid token")
     if not row["is_active"]:
         raise HTTPException(status_code=403, detail="User is disabled")
+    allowed_during_password_change = {"/auth/me", "/auth/logout", "/auth/change-password"}
+    if row["must_change_password"] and request.url.path not in allowed_during_password_change:
+        raise HTTPException(status_code=403, detail="Password change required")
     return {
         "id": row["id"],
         "username": row["username"],
         "full_name": row["full_name"] or row["username"],
         "role": normalize_role(row["role"]),
+        "must_change_password": bool(row["must_change_password"]),
     }
 
 
@@ -1729,7 +1726,7 @@ async def login(body: LoginRequest):
     """Authenticate a test user and return its token."""
     conn = get_db()
     row = conn.execute(
-        "SELECT id, username, password_hash, role, full_name, is_active FROM users WHERE username = ?",
+        "SELECT id, username, password_hash, role, full_name, is_active, must_change_password FROM users WHERE username = ?",
         (body.username,),
     ).fetchone()
     conn.close()
@@ -1755,6 +1752,7 @@ async def login(body: LoginRequest):
             "username": row["username"],
             "full_name": row["full_name"] or row["username"],
             "role": normalize_role(row["role"]),
+            "must_change_password": bool(row["must_change_password"]),
         },
     }
 
@@ -1781,7 +1779,40 @@ async def me(user: dict = Depends(get_current_user)):
         "username": user["username"],
         "full_name": user["full_name"],
         "role": user["role"],
+        "must_change_password": user["must_change_password"],
     }
+
+
+@app.post("/auth/change-password")
+async def change_password(
+    body: PasswordChangeRequest,
+    user: dict = Depends(get_current_user),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
+    """Replace the current password and clear the temporary-password requirement."""
+    new_password = body.new_password.strip()
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    conn = get_db()
+    row = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user["id"],)).fetchone()
+    if not row or not verify_password(body.current_password, row["password_hash"]):
+        conn.close()
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    if verify_password(new_password, row["password_hash"]):
+        conn.close()
+        raise HTTPException(status_code=400, detail="New password must be different")
+    conn.execute(
+        "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
+        (hash_password(new_password), user["id"]),
+    )
+    if credentials:
+        conn.execute(
+            "DELETE FROM sessions WHERE user_id = ? AND token <> ?",
+            (user["id"], credentials.credentials),
+        )
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
 
 
 @app.get("/admin/users")
@@ -1790,7 +1821,7 @@ async def admin_list_users(user: dict = Depends(get_current_user)):
     require_admin(user)
     conn = get_db()
     rows = conn.execute(
-        "SELECT id, username, full_name, role, is_active, created_at, last_login_at "
+        "SELECT id, username, full_name, role, is_active, must_change_password, created_at, last_login_at "
         "FROM users ORDER BY created_at ASC"
     ).fetchall()
     conn.close()
@@ -1808,16 +1839,16 @@ async def admin_create_user(
     password = body.password.strip()
     if len(username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
-    if len(password) < 4:
-        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     role = normalize_role(body.role)
     full_name = (body.full_name or "").strip() or username
 
     conn = get_db()
     try:
         conn.execute(
-            "INSERT INTO users (username, password_hash, role, full_name, is_active, created_at) "
-            "VALUES (?, ?, ?, ?, 1, ?)",
+            "INSERT INTO users (username, password_hash, role, full_name, is_active, must_change_password, created_at) "
+            "VALUES (?, ?, ?, ?, 1, 1, ?)",
             (username, hash_password(password), role, full_name, datetime.utcnow().isoformat()),
         )
         conn.commit()
@@ -1826,7 +1857,7 @@ async def admin_create_user(
         raise HTTPException(status_code=409, detail="That username already exists")
     new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     row = conn.execute(
-        "SELECT id, username, full_name, role, is_active, created_at, last_login_at FROM users WHERE id = ?",
+        "SELECT id, username, full_name, role, is_active, must_change_password, created_at, last_login_at FROM users WHERE id = ?",
         (new_id,),
     ).fetchone()
     conn.close()
@@ -1878,7 +1909,7 @@ async def admin_update_user(
         conn.close()
         raise HTTPException(status_code=409, detail="That username already exists")
     updated = conn.execute(
-        "SELECT id, username, full_name, role, is_active, created_at, last_login_at FROM users WHERE id = ?",
+        "SELECT id, username, full_name, role, is_active, must_change_password, created_at, last_login_at FROM users WHERE id = ?",
         (target_user_id,),
     ).fetchone()
     conn.close()
@@ -1893,13 +1924,13 @@ async def admin_reset_password(
 ):
     """Reset a user's password from the admin panel."""
     require_admin(user)
-    if len(body.password.strip()) < 4:
-        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    if len(body.password.strip()) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     if not get_user_row(target_user_id):
         raise HTTPException(status_code=404, detail="User not found")
     conn = get_db()
     conn.execute(
-        "UPDATE users SET password_hash = ? WHERE id = ?",
+        "UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?",
         (hash_password(body.password.strip()), target_user_id),
     )
     conn.execute("DELETE FROM sessions WHERE user_id = ?", (target_user_id,))
@@ -2269,7 +2300,7 @@ async def chat(
 
     context_chunks = await load_visible_context_chunks(user, model)
     safety = await analyze_user_message_safety(question, model)
-    ai_messages = build_chat_messages_with_all_visible_chunks(req, user, context_chunks)
+    ai_messages = build_chat_messages_with_visible_context(req, context_chunks)
     audit_record = build_chat_audit_record(req, user, model, question, safety, context_chunks)
 
     if not context_chunks:

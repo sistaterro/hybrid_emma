@@ -34,7 +34,7 @@ Current backend capabilities:
 - Suspicious RAG audit logs in `logs/rag_audit/`.
 - Suspicious chat manipulation audit logs in `logs/chat_audit/`.
 - Detailed exception logs in `logs/exception_log/`.
-- Chat context built from all visible safe chunks, not a fixed top-k retrieval limit.
+- Chat context built from ordered visible safe chunks within a configurable character budget, not a relevance-based top-k limit.
 - Backend-generated `[NO INFO]` replies when no visible safe RAG context is available.
 
 Current role model:
@@ -155,6 +155,7 @@ Environment variables are also supported:
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY`
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
+- `EMMA_MAX_CONTEXT_CHARS` (positive integer, defaults to `60000`)
 
 ---
 
@@ -188,6 +189,7 @@ password: admin1234
 ```
 
 Admins can change usernames and reset passwords from the admin panel. If you rename a user, the old username no longer works for login.
+New users and users whose password was reset receive a temporary password. They can authenticate only to replace it, and all other protected endpoints remain blocked until the change is complete. A fresh bootstrap administrator is subject to the same first-use flow; existing databases migrate without unexpectedly locking established accounts.
 
 ---
 
@@ -223,7 +225,7 @@ Selected LangChain chat model streams or returns the answer
 Response is tagged with [RAG] / [DRIFT] / [NO INFO]
 ```
 
-This rebuilt flow intentionally does not use embeddings, `.npy` files, router prompts, or a fixed top-k chunk limit. When visible safe chunks exist, the model receives that chunk set and decides which parts are useful for the answer. When no visible safe chunks exist, Emma does not ask the provider to answer from general knowledge; the backend returns a deterministic `[NO INFO]` response.
+This rebuilt flow intentionally does not use embeddings, `.npy` files, router prompts, or relevance-based top-k retrieval. Ordered visible safe chunks are admitted whole until the `EMMA_MAX_CONTEXT_CHARS` budget is reached; the default is 60,000 characters. When no visible safe chunks fit or exist, Emma does not ask the provider to answer from general knowledge; the backend returns a deterministic localized `[NO INFO]` response.
 
 ---
 
@@ -251,6 +253,7 @@ Permissions:
 ```text
 hybrid_emma/
 |-- server.py              # Active FastAPI backend
+|-- chat_policy.py         # Context budgeting and deterministic localized replies
 |-- prompts.py             # Canonical prompt builders
 |-- requirements.txt       # Python dependencies
 |-- run.bat                # Windows launcher
@@ -325,7 +328,7 @@ The tests mock provider calls and focus on backend behavior, permissions, RAG in
 
 ## Current Technical Notes
 
-- `server.py` is still the active backend boundary and remains monolithic.
+- `server.py` remains the active HTTP and persistence boundary; pure context-budget and deterministic-language policies have moved to `chat_policy.py` as the first cohesive extraction.
 - `prompts.py` is the canonical place for active prompt builders.
 - Emma's conversational persona is defined in `build_rag_prompt(...)`: she presents herself as an adult woman and uses feminine self-reference without stereotypes.
 - Python classes, functions, and async functions are expected to have concise docstrings. New implementation work should add or update docstrings alongside the code change.
@@ -333,6 +336,7 @@ The tests mock provider calls and focus on backend behavior, permissions, RAG in
 - RAG ingestion writes JSON chunks only.
 - Chat streaming is supported by both `ui/chat.html` and `ui/chat_evil_emma.html`.
 - Chat returns backend-generated `[NO INFO]` when no visible safe chunks are available, and the backend conservatively adds a missing response tag if a provider omits it.
+- Deterministic `[NO INFO]` replies support Spanish, English, Dutch, German, French, Italian, and Portuguese.
 - Audit log folders rotate at 500 files.
 
 ---

@@ -1114,7 +1114,7 @@
     </div>
     <div class="form-group">
       <label class="form-label">Password</label>
-      <input class="form-input" id="newUserPassword" type="password" placeholder="Temporary password">
+      <input class="form-input" id="newUserPassword" type="password" minlength="8" placeholder="At least 8 characters">
     </div>
     <div class="form-group">
       <label class="form-label">Role</label>
@@ -1131,116 +1131,68 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-edit-user">
+  <div class="modal">
+    <div class="modal-title">Edit User</div>
+    <div class="form-group">
+      <label class="form-label" for="editUserFullName">Full name</label>
+      <input class="form-input" id="editUserFullName" type="text">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="editUsername">Username</label>
+      <input class="form-input" id="editUsername" type="text" minlength="3">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="editUserRole">Role</label>
+      <select class="form-select" id="editUserRole">
+        <option value="user">User</option>
+        <option value="read_only">Read-only</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-edit-user')">Cancel</button>
+      <button class="btn-primary" onclick="saveEditedUser()">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-reset-password">
+  <div class="modal">
+    <div class="modal-title">Set Temporary Password</div>
+    <div class="form-group">
+      <label class="form-label" for="resetPasswordValue">Temporary password</label>
+      <input class="form-input" id="resetPasswordValue" type="password" minlength="8" autocomplete="new-password">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-reset-password')">Cancel</button>
+      <button class="btn-primary" onclick="saveTemporaryPassword()">Set password</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
-
-<script>
-  const API = 'http://localhost:8650';
-
-  // ── NAVIGATION ──────────────────────────────────────────
-
-  function showPanel(name) {
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('panel-' + name).classList.add('active');
-    event.currentTarget.classList.add('active');
-  }
-
-  // ── MODALS ──────────────────────────────────────────────
-
-  function openModal(id) {
-    document.getElementById(id).classList.add('show');
-  }
-
-  function closeModal(id) {
-    document.getElementById(id).classList.remove('show');
-  }
-
-  document.querySelectorAll('.modal-overlay').forEach(overlay => {
-    overlay.addEventListener('click', e => {
-      if (e.target === overlay) overlay.classList.remove('show');
-    });
-  });
-
-  // ── USER ACTIONS ────────────────────────────────────────
-
-  function filterUsers(q) {
-    const rows = document.querySelectorAll('#users-tbody tr');
-    rows.forEach(row => {
-      const text = row.textContent.toLowerCase();
-      row.style.display = text.includes(q.toLowerCase()) ? '' : 'none';
-    });
-  }
-
-  function impersonate(username) {
-    showToast(`Viewing as ${username} — read-only mode`, '');
-  }
-
-  function editUser(username) {
-    showToast(`Edit user: ${username}`, '');
-  }
-
-  function toggleUser(username, enable) {
-    const action = enable ? 'enabled' : 'disabled';
-    showToast(`User ${username} ${action}`, enable ? 'success' : '');
-  }
-
-  function createUser() {
-    closeModal('modal-new-user');
-    showToast('User created successfully', 'success');
-  }
-
-  function logout() {
-    window.location.href = 'login.html';
-  }
-
-  // ── SYSTEM STATUS ───────────────────────────────────────
-
-  async function loadSystemStatus() {
-    try {
-      const res  = await fetch(`${API}/health`);
-      const data = await res.json();
-      const localCount = data.local_models?.length || 0;
-      document.getElementById('ollama-status').textContent  = localCount ? `${localCount} local` : 'Not configured';
-      document.getElementById('ollama-status').className = localCount ? 'system-row-value ok' : 'system-row-value warn';
-      document.getElementById('current-model').textContent  = data.models?.[0]?.label || data.models?.[0]?.id || '---';
-      document.getElementById('model-count').textContent    = data.models?.length + ' models' || '—';
-    } catch {
-      document.getElementById('ollama-status').textContent = 'Unavailable';
-      document.getElementById('ollama-status').className   = 'system-row-value warn';
-    }
-
-    try {
-      const res  = await fetch(`${API}/files`);
-      const data = await res.json();
-      const files  = data.files || [];
-      const chunks = files.reduce((sum, f) => sum + (f.chunks || 0), 0);
-      document.getElementById('sys-global-rags').textContent    = files.length + ' files';
-      document.getElementById('sys-total-chunks').textContent   = chunks + ' chunks';
-      document.getElementById('badge-rags').textContent         = files.length;
-    } catch {}
-  }
-
-  // ── TOAST ───────────────────────────────────────────────
-
-  let toastTimer;
-  function showToast(msg, type = '') {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className   = 'show' + (type ? ' ' + type : '');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.className = ''; }, 3000);
-  }
-
-  // ── INIT ────────────────────────────────────────────────
-
-  loadSystemStatus();
-</script>
 
 <script>
   (() => {
     const API = 'http://localhost:8650';
     let currentUser = null;
     let usersCache = [];
+    let selectedUser = null;
+
+    window.openModal = function openModal(id) {
+      document.getElementById(id).classList.add('show');
+    };
+
+    window.closeModal = function closeModal(id) {
+      document.getElementById(id).classList.remove('show');
+    };
+
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', event => {
+        if (event.target === overlay) closeModal(overlay.id);
+      });
+    });
 
     function getToken() {
       return localStorage.getItem('emma_token');
@@ -1296,8 +1248,8 @@
       const tbody = document.getElementById('users-tbody');
       tbody.innerHTML = users.map(u => {
         const initial = (u.full_name || u.username || '?').trim().charAt(0).toUpperCase();
-        const activeLabel = u.is_active ? 'Active' : 'Disabled';
-        const activeClass = u.is_active ? 'active' : 'disabled';
+        const activeLabel = !u.is_active ? 'Disabled' : (u.must_change_password ? 'Temporary password' : 'Active');
+        const activeClass = u.is_active && !u.must_change_password ? 'active' : 'disabled';
         const canDelete = currentUser && currentUser.id !== u.id;
         return `
           <tr>
@@ -1424,15 +1376,19 @@
 
     window.__emmaAdmin = {
       editUser: async (username) => {
-        const user = usersCache.find(u => u.username === username);
-        if (!user) return;
-        const newUsername = prompt('Username', user.username);
-        if (newUsername === null) return;
-        const fullName = prompt('Full name', user.full_name || user.username);
-        if (fullName === null) return;
-        const role = prompt('Role: admin, user, read_only', user.role);
-        if (role === null) return;
-        const res = await authFetch(`/admin/users/${user.id}`, {
+        selectedUser = usersCache.find(u => u.username === username);
+        if (!selectedUser) return;
+        document.getElementById('editUsername').value = selectedUser.username;
+        document.getElementById('editUserFullName').value = selectedUser.full_name || selectedUser.username;
+        document.getElementById('editUserRole').value = selectedUser.role;
+        openModal('modal-edit-user');
+      },
+      saveEditedUser: async () => {
+        if (!selectedUser) return;
+        const newUsername = document.getElementById('editUsername').value.trim();
+        const fullName = document.getElementById('editUserFullName').value.trim();
+        const role = document.getElementById('editUserRole').value;
+        const res = await authFetch(`/admin/users/${selectedUser.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: newUsername, full_name: fullName, role }),
@@ -1442,8 +1398,9 @@
           showToast(data.detail || 'Could not update user', 'error');
           return;
         }
+        closeModal('modal-edit-user');
         await loadUsers();
-        showToast(`Updated ${newUsername.trim() || username}`, 'success');
+        showToast(`Updated ${newUsername}`, 'success');
       },
       toggleUser: async (username, enable) => {
         const user = usersCache.find(u => u.username === username);
@@ -1462,11 +1419,15 @@
         showToast(`User ${username} ${enable ? 'enabled' : 'disabled'}`, enable ? 'success' : '');
       },
       resetPassword: async (username) => {
-        const user = usersCache.find(u => u.username === username);
-        if (!user) return;
-        const password = prompt(`New password for ${username}`);
-        if (password === null) return;
-        const res = await authFetch(`/admin/users/${user.id}/reset-password`, {
+        selectedUser = usersCache.find(u => u.username === username);
+        if (!selectedUser) return;
+        document.getElementById('resetPasswordValue').value = '';
+        openModal('modal-reset-password');
+      },
+      saveTemporaryPassword: async () => {
+        if (!selectedUser) return;
+        const password = document.getElementById('resetPasswordValue').value;
+        const res = await authFetch(`/admin/users/${selectedUser.id}/reset-password`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ password }),
@@ -1476,7 +1437,9 @@
           showToast(data.detail || 'Could not reset password', 'error');
           return;
         }
-        showToast(`Password reset for ${username}`, 'success');
+        closeModal('modal-reset-password');
+        await loadUsers();
+        showToast(`Temporary password set for ${selectedUser.username}`, 'success');
       },
       deleteUser: async (username) => {
         const user = usersCache.find(u => u.username === username);
@@ -1503,6 +1466,9 @@
         showToast(`Deleted ${stem}`, 'success');
       }
     };
+
+    window.saveEditedUser = () => window.__emmaAdmin.saveEditedUser();
+    window.saveTemporaryPassword = () => window.__emmaAdmin.saveTemporaryPassword();
 
     window.logout = async function logout() {
       const token = getToken();

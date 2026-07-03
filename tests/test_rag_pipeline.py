@@ -93,6 +93,10 @@ class RagPipelineTests(unittest.TestCase):
 
         self.server.generate_ai_reply = fake_generate_ai_reply
         self.server.init_db()
+        conn = self.server.get_db()
+        conn.execute("UPDATE users SET must_change_password = 0 WHERE username = 'admin'")
+        conn.commit()
+        conn.close()
         self.client = TestClient(self.server.app)
 
     def tearDown(self):

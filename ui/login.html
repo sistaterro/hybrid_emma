@@ -189,10 +189,34 @@
       <p class="error" id="errorMsg"></p>
       <button type="submit" id="loginBtn">Sign in</button>
     </form>
+
+    <form id="passwordChangeForm" hidden>
+      <div class="field">
+        <label for="currentPassword">Temporary password</label>
+        <input id="currentPassword" type="password" autocomplete="current-password" required>
+      </div>
+      <div class="field">
+        <label for="newPassword">New password</label>
+        <input id="newPassword" type="password" autocomplete="new-password" minlength="8" required>
+      </div>
+      <div class="field">
+        <label for="confirmPassword">Confirm new password</label>
+        <input id="confirmPassword" type="password" autocomplete="new-password" minlength="8" required>
+      </div>
+      <p class="error" id="passwordError"></p>
+      <button type="submit" id="passwordChangeBtn">Change password</button>
+    </form>
   </div>
 
   <script>
     const BASE_URL = 'http://localhost:8650';
+
+    function showPasswordChange(currentPassword = '') {
+      document.getElementById('loginForm').hidden = true;
+      document.getElementById('passwordChangeForm').hidden = false;
+      document.getElementById('currentPassword').value = currentPassword;
+      document.getElementById('newPassword').focus();
+    }
 
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -218,11 +242,51 @@
         const data = await res.json();
         localStorage.setItem('emma_token', data.token);
         localStorage.setItem('emma_user', JSON.stringify(data.user));
-        window.location.href = '/ui/index.html';
+        if (data.user.must_change_password) {
+          showPasswordChange(password);
+        } else {
+          window.location.href = '/ui/index.html';
+        }
       } catch (err2) {
         err.textContent = err2.message;
         btn.disabled = false;
         btn.textContent = 'Sign in';
+      }
+    });
+
+    document.getElementById('passwordChangeForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('passwordChangeBtn');
+      const err = document.getElementById('passwordError');
+      const currentPassword = document.getElementById('currentPassword').value;
+      const newPassword = document.getElementById('newPassword').value;
+      const confirmation = document.getElementById('confirmPassword').value;
+      if (newPassword !== confirmation) {
+        err.textContent = 'New passwords do not match';
+        return;
+      }
+      btn.disabled = true;
+      err.textContent = '';
+      try {
+        const res = await fetch(`${BASE_URL}/auth/change-password`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('emma_token')}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.detail || 'Could not change password');
+        }
+        const user = JSON.parse(localStorage.getItem('emma_user') || '{}');
+        user.must_change_password = false;
+        localStorage.setItem('emma_user', JSON.stringify(user));
+        window.location.href = '/ui/index.html';
+      } catch (err2) {
+        err.textContent = err2.message;
+        btn.disabled = false;
       }
     });
   </script>

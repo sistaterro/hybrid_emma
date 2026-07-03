@@ -682,7 +682,7 @@
       <p>What makes Emma different from a basic chat-with-documents tool is that it also treats the knowledge base itself as something that can be checked. When a new RAG is uploaded, Emma can compare it against the user's existing and visible global RAGs and warn about likely contradictions before those conflicts silently shape future answers.</p>
       <p>Emma can still accept inconsistent RAGs. That is sometimes useful, but it is also risky: contradictory documents can lead to unstable retrieval, misleading grounded answers, or comparisons that depend too much on whichever file was routed first. The inconsistency warning system exists to make that danger visible instead of hiding it.</p>
       <p>Emma is also built to resist manipulation. Chat messages are screened for pressure or false authority, and uploaded RAGs are screened for prompt injection. RAGs marked <code>high</code> risk stay visible for review, but the backend excludes them from chat context.</p>
-      <p>Access is role-based. <code>admin</code> can manage users and all RAGs, <code>user</code> can manage only their own <code>mine</code> RAGs, and <code>read_only</code> can use chat but cannot access upload. Admin user management includes username changes, role changes, active-state changes, password resets, and deletion.</p>
+      <p>Access is role-based. <code>admin</code> can manage users and all RAGs, <code>user</code> can manage only their own <code>mine</code> RAGs, and <code>read_only</code> can use chat but cannot access upload. New and reset accounts must replace their temporary password before protected features become available.</p>
 
       <div class="feat-grid">
         <div class="feat-card">
@@ -806,7 +806,7 @@ uvicorn server:app --reload --port 8650</code></pre>
     <!-- HOW RAG WORKS -->
     <div class="doc-section" id="how-rag-works">
       <h2>How RAG works</h2>
-      <p class="section-sub">Visible safe context, not top-k retrieval</p>
+      <p class="section-sub">Bounded visible safe context, not relevance-based top-k retrieval</p>
 
       <p>RAG grounds the model's answers in uploaded documents instead of relying only on model training data. In the rebuilt Emma 2.0 flow, the backend loads the chunks visible to the authenticated user, filters out high-risk RAGs, and sends a model prompt only when safe context exists. If no visible safe chunks are available, the backend returns <code>[NO INFO]</code> directly.</p>
 
@@ -970,6 +970,7 @@ uvicorn server:app --reload --port 8650</code></pre>
           <thead><tr><th>Path</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td>server.py</td><td>FastAPI boundary for auth, roles, conversations, file management, RAG ingestion, safety checks, provider selection, and chat.</td></tr>
+            <tr><td>chat_policy.py</td><td>Pure context-budget and deterministic localized reply policies.</td></tr>
             <tr><td>prompts.py</td><td>Canonical prompt builders for safety, inconsistency detection, and RAG answers.</td></tr>
             <tr><td>files/</td><td>Uploaded source <code>.txt</code> files plus <code>files_index.json</code>, <code>conflicts_index.json</code>, and <code>security_index.json</code>.</td></tr>
             <tr><td>chunks/</td><td>Generated JSON chunk files. Embeddings and <code>.npy</code> files are not part of the rebuilt flow.</td></tr>
@@ -990,7 +991,7 @@ uvicorn server:app --reload --port 8650</code></pre>
             <tr><td>process_rag_file()</td><td>Indexes a source file, saves chunks, stores descriptions, runs security analysis, writes RAG audits, and schedules conflict checks.</td></tr>
             <tr><td>assess_rag_prompt_injection()</td><td>Model-based multilingual detector for suspicious RAG instructions. Produces <code>none</code>, <code>medium</code>, or <code>high</code> risk.</td></tr>
             <tr><td>visible_chat_chunk_sources()</td><td>Collects chat-visible RAG sources and filters out high-risk RAGs before chunks can enter the prompt.</td></tr>
-            <tr><td>build_chat_messages_with_all_visible_chunks()</td><td>Builds the final chat messages with safe RAG context from <code>prompts.py</code>.</td></tr>
+            <tr><td>build_chat_messages_with_visible_context()</td><td>Builds the final chat messages with bounded safe RAG context from <code>prompts.py</code>.</td></tr>
             <tr><td>build_no_info_reply()</td><td>Builds the deterministic backend <code>[NO INFO]</code> reply used when no visible safe chunks are available.</td></tr>
             <tr><td>ensure_response_tag()</td><td>Adds a conservative response tag if a provider omits the required leading tag.</td></tr>
             <tr><td>generate_ai_reply()</td><td>Runs generation through the LangChain provider factory.</td></tr>
@@ -1024,14 +1025,16 @@ uvicorn server:app --reload --port 8650</code></pre>
       <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/auth/logout</span></div>
       <p>Invalidates the current session token.</p>
       <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/auth/me</span></div>
-      <p>Returns the authenticated user profile, including role and active status.</p>
+      <p>Returns the authenticated user profile, role, active state, and password-change requirement.</p>
+      <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/auth/change-password</span></div>
+      <p>Replaces a temporary password. Accounts marked for password change can use only session inspection, logout, and this endpoint until the requirement is cleared.</p>
 
       <h3>Admin users</h3>
       <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/admin/users</span></div>
       <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/admin/users</span></div>
       <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/admin/users/{id}/reset-password</span></div>
       <div class="endpoint"><span class="method method-delete">DELETE</span><span class="endpoint-path">/admin/users/{id}</span></div>
-      <p>Admin-only endpoints for user management. Admins can create users, rename usernames, update role and active state, reset passwords, and delete users with related local storage.</p>
+      <p>Admin-only endpoints for user management. Admins can create users, rename usernames, update role and active state, set temporary passwords, and delete users with related local storage.</p>
 
       <h3>List files</h3>
       <div class="endpoint"><span class="method method-get">GET</span><span class="endpoint-path">/files</span></div>
