@@ -321,6 +321,9 @@ class CoreEndpointTests(unittest.TestCase):
         self.assertIn("gemini:gemini-2.5-flash", [model["id"] for model in data["models"]])
         self.assertEqual(data["sources"], ["external_apis"])
         self.assertTrue(data["external_api_models"])
+        self.assertTrue(
+            all(model["source_label"] == "External APIs" for model in data["external_api_models"])
+        )
         self.assertNotIn("secret-gemini-key", response.text)
 
     def test_health_reports_local_models_without_api_keys(self):

@@ -36,6 +36,8 @@ The rebuild goal is to keep endpoint behavior explicit while moving model calls 
 
 - Understand the current flow before refactoring. This repo contains several pragmatic decisions and known technical debt; do not assume something is "wrong" just because it is not heavily modularized.
 - Prefer small, safe, reversible changes. Avoid large refactors if the problem can be solved with a localized improvement.
+- Write all source code, identifiers, comments, docstrings, backend messages, logs, and frontend text in English, regardless of the language used to request the change.
+- Non-English text is allowed only when multilingual content is a functional requirement, such as language detection, localized model behavior, multilingual prompt-injection screening, translation, or explicit multilingual test fixtures. Keep such exceptions narrowly scoped and documented by context.
 - Keep sensitive logic in the backend. Permissions, validations, and access rules should not rely only on the frontend.
 - The frontend should remain thin. The pages in `ui/` call the API with `fetch` and should not absorb complex business rules.
 - Preserve the local/offline-first nature of the project. Do not introduce external infrastructure dependencies unless explicitly necessary.
@@ -179,6 +181,7 @@ Practical rule:
 - All Python classes, functions, and async functions should include concise docstrings. New implementations must add or update docstrings as part of the same change so the code remains easy to scan and onboard.
 - If a text or rule is hard to locate, move it to a canonical place.
 - Keep names consistent with the current domain: `global`, `mine`, `owner_id`, `role`, `is_active`, and so on.
+- Do not introduce localized source labels or UI fallbacks. Stable catalog and interface labels such as `External APIs` must remain in English.
 - Do not introduce empty abstractions such as managers or state-less classes if simple functions are enough.
 - If adding LangChain or LangGraph, keep framework integration behind a thin internal boundary so endpoint code remains easy to read and test.
 - Model generation should go through `generate_ai_reply(...)` and the LangChain model factory. Do not call external provider REST APIs directly from endpoint code.

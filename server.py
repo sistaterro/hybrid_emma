@@ -90,6 +90,7 @@ LEGACY_API_KEY_FILES = {
 }
 CONFLICT_CHECK_TASKS: set[str] = set()
 OLLAMA_PROBE_TIMEOUT = 0.75
+EXTERNAL_API_SOURCE_LABEL = "External APIs"
 
 MODEL_CATALOG = [
     {
@@ -97,7 +98,7 @@ MODEL_CATALOG = [
         "label": "Gemini 2.5 Flash",
         "provider": "gemini",
         "source": "external_apis",
-        "source_label": "APIs externas",
+        "source_label": EXTERNAL_API_SOURCE_LABEL,
         "model": "gemini-2.5-flash",
     },
     {
@@ -105,7 +106,7 @@ MODEL_CATALOG = [
         "label": "Gemini 2.5 Pro",
         "provider": "gemini",
         "source": "external_apis",
-        "source_label": "APIs externas",
+        "source_label": EXTERNAL_API_SOURCE_LABEL,
         "model": "gemini-2.5-pro",
     },
     {
@@ -113,7 +114,7 @@ MODEL_CATALOG = [
         "label": "GPT-4.1",
         "provider": "openai",
         "source": "external_apis",
-        "source_label": "APIs externas",
+        "source_label": EXTERNAL_API_SOURCE_LABEL,
         "model": "gpt-4.1",
     },
     {
@@ -121,7 +122,7 @@ MODEL_CATALOG = [
         "label": "GPT-4.1 Mini",
         "provider": "openai",
         "source": "external_apis",
-        "source_label": "APIs externas",
+        "source_label": EXTERNAL_API_SOURCE_LABEL,
         "model": "gpt-4.1-mini",
     },
     {
@@ -129,7 +130,7 @@ MODEL_CATALOG = [
         "label": "Claude Sonnet 4.5",
         "provider": "anthropic",
         "source": "external_apis",
-        "source_label": "APIs externas",
+        "source_label": EXTERNAL_API_SOURCE_LABEL,
         "model": "claude-sonnet-4-5",
     },
     {
@@ -137,7 +138,7 @@ MODEL_CATALOG = [
         "label": "Claude Sonnet 4",
         "provider": "anthropic",
         "source": "external_apis",
-        "source_label": "APIs externas",
+        "source_label": EXTERNAL_API_SOURCE_LABEL,
         "model": "claude-sonnet-4-0",
     },
 ]

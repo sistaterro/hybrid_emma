@@ -347,6 +347,8 @@ The tests mock provider calls and focus on backend behavior, permissions, tempor
 
 ## Current Technical Notes
 
+- English is the implementation language for source code, identifiers, comments, docstrings, backend messages, logs, and frontend text. Non-English literals are limited to intentional multilingual features and their tests, such as language detection and prompt-injection screening.
+- Model catalog source labels are standardized as `Local` and `External APIs` across the backend and chat clients.
 - `server.py` remains the active HTTP and persistence boundary; pure context-budget and deterministic-language policies have moved to `chat_policy.py` as the first cohesive extraction.
 - `prompts.py` is the canonical place for the five active prompt builders:
   - `build_safety_prompt(...)` reviews user messages for manipulation attempts.

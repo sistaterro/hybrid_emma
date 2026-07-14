@@ -1734,7 +1734,7 @@
       state.modelLabel = selected.label || selected.id;
       sel.innerHTML = normalized.map(m => {
         const label = m.label || m.id;
-        const source = m.source_label || (m.source === 'external_apis' ? 'APIs externas' : '');
+        const source = m.source_label || (m.source === 'external_apis' ? 'External APIs' : '');
         const provider = m.provider && m.provider !== 'local' ? ` / ${m.provider.toUpperCase()}` : '';
         const prefix = source ? `${source}${provider} / ` : '';
         return `<option value="${escHtml(m.id)}" ${m.id === state.model ? 'selected' : ''}>${escHtml(prefix + label)}</option>`;

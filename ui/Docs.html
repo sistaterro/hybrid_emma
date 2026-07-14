@@ -808,6 +808,8 @@ uvicorn server:app --reload --port 8650</code></pre>
       <h2>How RAG works</h2>
       <p class="section-sub">Bounded visible safe context, not relevance-based top-k retrieval</p>
 
+      <div class="callout"><strong>Implementation language:</strong> Source code, identifiers, comments, backend messages, logs, and frontend text are written in English regardless of the language used to request a change. Non-English literals are reserved for explicit multilingual behavior such as language detection, localized answers, prompt-injection screening, translation, and multilingual test fixtures. Model sources are displayed consistently as <code>Local</code> or <code>External APIs</code>.</div>
+
       <p>RAG grounds the model's answers in uploaded documents instead of relying only on model training data. In the rebuilt Emma 2.0 flow, the backend loads the chunks visible to the authenticated user and filters out high-risk RAGs. If no visible safe chunks are available, Emma uses the selected model in general-chat mode without a grounding tag and without exposing blocked RAG content.</p>
       <p>Safe chunks retain their source order and are admitted whole until <code>EMMA_MAX_CONTEXT_CHARS</code> is reached. The default budget is 60,000 characters. Invalid or non-positive settings fall back to that default, and chunks are never split merely to fill the remaining budget.</p>
 
