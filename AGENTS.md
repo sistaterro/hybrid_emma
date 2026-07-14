@@ -51,7 +51,8 @@ The rebuild goal is to keep endpoint behavior explicit while moving model calls 
 
 - `prompts.py`
   - Canonical location for active system prompts.
-  - Contains the active safety, RAG-security, inconsistency, and grounded-answer prompt builders.
+  - Contains exactly five active builders: user-message safety, RAG prompt-injection security, RAG inconsistency comparison, grounded RAG answers, and untagged general-model answers.
+  - `build_general_prompt(...)` is used only when no visible safe RAG has usable chunks, including when every chunked RAG is excluded as high risk.
   - Do not reintroduce routing prompts for "most relevant" files unless the RAG strategy changes again.
 
 - `chat_policy.py`
@@ -215,6 +216,7 @@ Practical rule:
 - On the home screen, preserve the 2-column card grid for wide responsive layouts so admin users see two rows with two entries.
 - Home-screen entry cards should open their destination in a new browser tab/window. On secondary screens, the existing logo/status surface in the upper sidebar should be clickable and return to `ui/index.html`; do not add a separate floating home button.
 - If a screen does not apply to a role, hide it and block direct access when appropriate.
+- In `ui/login.html`, preserve the `[hidden] { display: none !important; }` safeguard so the temporary-password form does not appear alongside the normal login form.
 - Visible UI version references currently use Emma 2.0 until a product-wide version bump is intentionally applied.
 
 ## Execution And Verification

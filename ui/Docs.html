@@ -993,6 +993,10 @@ uvicorn server:app --reload --port 8650</code></pre>
             <tr><td>assess_rag_prompt_injection()</td><td>Model-based multilingual detector for suspicious RAG instructions. Produces <code>none</code>, <code>medium</code>, or <code>high</code> risk.</td></tr>
             <tr><td>visible_chat_chunk_sources()</td><td>Collects chat-visible RAG sources and filters out high-risk RAGs before chunks can enter the prompt.</td></tr>
             <tr><td>build_chat_messages_with_visible_context()</td><td>Builds the final chat messages with bounded safe RAG context from <code>prompts.py</code>.</td></tr>
+            <tr><td>build_safety_prompt()</td><td>Reviews a user message for manipulation, fabricated approvals, pressure, or jailbreak attempts.</td></tr>
+            <tr><td>build_rag_security_prompt()</td><td>Screens an ingested document for multilingual prompt injection before its chunks can be trusted for chat.</td></tr>
+            <tr><td>build_inconsistency_prompt()</td><td>Compares two RAG documents and reports only direct factual contradictions.</td></tr>
+            <tr><td>build_rag_prompt()</td><td>Builds the grounded Emma prompt with untrusted-context delimiters and required response tags.</td></tr>
             <tr><td>build_general_prompt()</td><td>Builds the untagged general-purpose Emma prompt used when no visible safe chunked RAG is active.</td></tr>
             <tr><td>ensure_response_tag()</td><td>Adds a conservative response tag if a provider omits the required leading tag.</td></tr>
             <tr><td>generate_ai_reply()</td><td>Runs generation through the LangChain provider factory.</td></tr>
@@ -1062,6 +1066,7 @@ uvicorn server:app --reload --port 8650</code></pre>
       <h3>Chat</h3>
       <div class="endpoint"><span class="method method-post">POST</span><span class="endpoint-path">/chat</span></div>
       <p>Main chat endpoint. Accepts a model id, message history, optional conversation id, and stream flag. It runs chat safety analysis, loads visible safe RAG chunks, excludes high-risk RAGs, and generates through LangChain using either the grounded RAG prompt or the untagged general prompt when no safe chunks exist. Responses can stream incrementally.</p>
+      <div class="callout"><strong>Five-prompt architecture:</strong> Emma centralizes user-message safety, RAG security, inconsistency detection, grounded RAG answering, and untagged general answering in the five builders in <code>prompts.py</code>. General mode keeps Emma's natural feminine self-reference without forcing any fixed emotional attitude.</div>
       <pre><code>{
   "model": "gemini:gemini-1.5-flash",
   "messages": [

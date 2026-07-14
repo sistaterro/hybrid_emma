@@ -348,8 +348,15 @@ The tests mock provider calls and focus on backend behavior, permissions, tempor
 ## Current Technical Notes
 
 - `server.py` remains the active HTTP and persistence boundary; pure context-budget and deterministic-language policies have moved to `chat_policy.py` as the first cohesive extraction.
-- `prompts.py` is the canonical place for active prompt builders.
+- `prompts.py` is the canonical place for the five active prompt builders:
+  - `build_safety_prompt(...)` reviews user messages for manipulation attempts.
+  - `build_rag_security_prompt(...)` screens ingested RAG documents for multilingual prompt injection.
+  - `build_inconsistency_prompt(...)` compares RAG documents for direct factual contradictions.
+  - `build_rag_prompt(...)` generates grounded, tagged answers when safe chunks are active.
+  - `build_general_prompt(...)` generates direct, untagged general-model answers when no safe chunked RAG is active.
 - Emma's conversational persona is defined in `build_rag_prompt(...)`: she presents herself as an adult woman and uses feminine self-reference without stereotypes.
+- The same natural feminine self-reference applies to `build_general_prompt(...)`; emotional adjectives in its instructions are grammatical examples, not a fixed personality.
+- The login password-change form relies on the HTML `hidden` state and remains invisible unless the backend reports `must_change_password`.
 - Python classes, functions, and async functions are expected to have concise docstrings. New implementation work should add or update docstrings alongside the code change.
 - Startup initialization uses FastAPI lifespan handlers.
 - RAG ingestion writes JSON chunks only.
