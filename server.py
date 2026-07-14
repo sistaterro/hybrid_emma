@@ -20,7 +20,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from chat_policy import DEFAULT_MAX_CONTEXT_CHARS, bounded_context_chunks, no_info_reply, positive_int_setting
-from prompts import build_inconsistency_prompt, build_rag_prompt, build_safety_prompt
+from prompts import build_general_prompt, build_inconsistency_prompt, build_rag_prompt, build_safety_prompt
 
 
 @asynccontextmanager
@@ -930,7 +930,7 @@ async def load_visible_context_chunks(user: dict, model: dict | None = None) -> 
 
 
 def build_chat_messages_with_visible_context(req: ChatRequest, context_chunks: list[dict] | None = None) -> list[Message]:
-    """Build chat messages with the bounded visible safe RAG context."""
+    """Build chat messages for grounded or general mode based on active safe chunks."""
     if not req.messages:
         raise HTTPException(status_code=400, detail="No messages to answer")
     question = req.messages[-1].content.strip()
@@ -939,12 +939,9 @@ def build_chat_messages_with_visible_context(req: ChatRequest, context_chunks: l
 
     if context_chunks is None:
         context_chunks = []
-    if not context_chunks:
-        return req.messages
-
-    rag_prompt = build_rag_prompt(question, context_chunks)
+    prompt = build_rag_prompt(question, context_chunks) if context_chunks else build_general_prompt(question)
     history = req.messages[:-1]
-    return [*history, Message(role="user", content=rag_prompt)]
+    return [*history, Message(role="user", content=prompt)]
 
 
 async def detect_rag_inconsistencies(
@@ -1545,6 +1542,15 @@ def ensure_response_tag(text: str, context_chunks: list[dict]) -> str:
     return f"{prefix}\n{text.lstrip()}" if text.strip() else f"{prefix}\n"
 
 
+def remove_response_tag(text: str) -> str:
+    """Remove an accidental grounding tag from a general-mode response."""
+    tag = response_tag(text)
+    if not tag:
+        return text
+    leading_length = len(text) - len(text.lstrip())
+    return text[leading_length + len(tag) :].lstrip("\r\n ")
+
+
 def build_no_info_reply(question: str) -> str:
     """Build a deterministic no-context reply in the user's likely language."""
     return no_info_reply(question)
@@ -1577,6 +1583,45 @@ async def stream_chat_as_json_lines(
 ):
     """Stream chat chunks as newline-delimited JSON and persist the final reply."""
     reply_parts = []
+    if not context_chunks:
+        prefix_checked = False
+        buffered_start = ""
+        possible_tags = ("[RAG]", "[DRIFT]", "[NO INFO]")
+        async for piece in generate_ai_reply_stream(model, messages):
+            if not prefix_checked:
+                buffered_start += piece
+                stripped_start = buffered_start.lstrip()
+                if response_tag(buffered_start):
+                    prefix_checked = True
+                    clean_start = remove_response_tag(buffered_start)
+                    if clean_start:
+                        reply_parts.append(clean_start)
+                        yield json.dumps({"text": clean_start, "done": False}) + "\n"
+                    buffered_start = ""
+                elif any(tag.startswith(stripped_start) for tag in possible_tags):
+                    continue
+                else:
+                    prefix_checked = True
+                    reply_parts.append(buffered_start)
+                    yield json.dumps({"text": buffered_start, "done": False}) + "\n"
+                    buffered_start = ""
+                continue
+            reply_parts.append(piece)
+            yield json.dumps({"text": piece, "done": False}) + "\n"
+
+        if not prefix_checked and buffered_start:
+            clean_start = remove_response_tag(buffered_start)
+            if clean_start:
+                reply_parts.append(clean_start)
+                yield json.dumps({"text": clean_start, "done": False}) + "\n"
+
+        reply = "".join(reply_parts)
+        store_chat_messages(req.conversation_id, user["id"], req.messages, reply)
+        audit_record["response"] = {"tag": None, "length": len(reply)}
+        persist_suspicious_chat_audit_log(audit_record)
+        yield json.dumps({"text": "", "done": True}) + "\n"
+        return
+
     prefix_checked = False
     buffered_start = ""
     possible_tags = ("[RAG]", "[DRIFT]", "[NO INFO]")
@@ -2303,25 +2348,6 @@ async def chat(
     ai_messages = build_chat_messages_with_visible_context(req, context_chunks)
     audit_record = build_chat_audit_record(req, user, model, question, safety, context_chunks)
 
-    if not context_chunks:
-        reply = build_no_info_reply(question)
-        if req.stream:
-            return StreamingResponse(
-                stream_static_chat_reply_as_json_lines(reply, req, user, audit_record),
-                media_type="application/x-ndjson",
-            )
-        store_chat_messages(req.conversation_id, user["id"], req.messages, reply)
-        audit_record["response"] = {
-            "tag": response_tag(reply),
-            "length": len(reply),
-        }
-        persist_suspicious_chat_audit_log(audit_record)
-        return {
-            "model": model["id"],
-            "tag": response_tag(reply),
-            "message": {"role": "assistant", "content": reply},
-        }
-
     if req.stream:
         return StreamingResponse(
             stream_chat_as_json_lines(model, ai_messages, req, user, audit_record, context_chunks),
@@ -2329,7 +2355,10 @@ async def chat(
         )
 
     reply = await generate_ai_reply(model, ai_messages)
-    reply = ensure_response_tag(reply, context_chunks)
+    if context_chunks:
+        reply = ensure_response_tag(reply, context_chunks)
+    else:
+        reply = remove_response_tag(reply)
     store_chat_messages(req.conversation_id, user["id"], req.messages, reply)
 
     audit_record["response"] = {

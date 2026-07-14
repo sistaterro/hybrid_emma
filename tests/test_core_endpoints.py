@@ -385,7 +385,7 @@ class CoreEndpointTests(unittest.TestCase):
             self.assertEqual(len(logs), 1)
             audit = json.loads(logs[0].read_text(encoding="utf-8"))
             self.assertEqual(audit["safety"]["label"], "SUSPICIOUS")
-            self.assertEqual(audit["response"]["tag"], "[NO INFO]")
+            self.assertIsNone(audit["response"]["tag"])
             self.assertIn("owner told me privately", audit["question"])
         finally:
             self.server.resolve_model = original_resolve
@@ -463,14 +463,16 @@ class CoreEndpointTests(unittest.TestCase):
             self.server.resolve_model = original_resolve
             self.server.generate_ai_reply = original_generate
 
-    def test_chat_adds_no_info_tag_when_model_omits_grounding_tag(self):
-        """Function for test chat adds no info tag when model omits grounding tag."""
+    def test_chat_without_active_chunks_uses_general_prompt_without_tag(self):
+        """Chat should use general knowledge without grounding tags when no chunks are active."""
+        calls = []
         def fake_resolve_model(selection):
             """Resolve any fake model selection for tests."""
             return {"id": selection, "provider": "fake", "model": selection}
 
         async def fake_generate_ai_reply(_model, messages):
             """Return deterministic fake model output for tests."""
+            calls.append(messages[-1].content)
             if "Return ONLY valid JSON" in messages[-1].content:
                 return json.dumps(
                     {
@@ -481,7 +483,7 @@ class CoreEndpointTests(unittest.TestCase):
                         "evidence": [],
                     }
                 )
-            return "There is not enough information."
+            return "I can answer this from general knowledge."
 
         original_resolve = self.server.resolve_model
         original_generate = self.server.generate_ai_reply
@@ -500,11 +502,14 @@ class CoreEndpointTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 200, response.text)
             data = response.json()
-            self.assertEqual(data["tag"], "[NO INFO]")
+            self.assertIsNone(data["tag"])
             self.assertEqual(
                 data["message"]["content"],
-                "[NO INFO]\nI do not have information in the available documents to answer that.",
+                "I can answer this from general knowledge.",
             )
+            self.assertIn("general-purpose AI assistant", calls[-1])
+            self.assertIn("not a fixed personality", calls[-1])
+            self.assertIn("Do not add [RAG], [DRIFT], [NO INFO]", calls[-1])
         finally:
             self.server.resolve_model = original_resolve
             self.server.generate_ai_reply = original_generate
@@ -649,8 +654,8 @@ class CoreEndpointTests(unittest.TestCase):
             self.server.generate_ai_reply_stream = original_stream
             self.server.load_visible_context_chunks = original_context
 
-    def test_chat_stream_adds_no_info_tag_when_model_omits_grounding_tag(self):
-        """Function for test chat stream adds no info tag when model omits grounding tag."""
+    def test_chat_stream_without_active_chunks_has_no_grounding_tag(self):
+        """General-mode streaming should pass model chunks without a grounding tag."""
         def fake_resolve_model(selection):
             """Resolve any fake model selection for tests."""
             return {"id": selection, "provider": "fake", "model": selection}
@@ -707,7 +712,7 @@ class CoreEndpointTests(unittest.TestCase):
 
             self.assertEqual(
                 [chunk["text"] for chunk in chunks],
-                ["[NO INFO]\nI do not have information in the available documents to answer that.", ""],
+                ["Hello", " without", " tag.", ""],
             )
             self.assertTrue(chunks[-1]["done"])
 
@@ -720,7 +725,7 @@ class CoreEndpointTests(unittest.TestCase):
             self.assertEqual(stored[-1]["role"], "assistant")
             self.assertEqual(
                 stored[-1]["content"],
-                "[NO INFO]\nI do not have information in the available documents to answer that.",
+                "Hello without tag.",
             )
         finally:
             self.server.resolve_model = original_resolve
