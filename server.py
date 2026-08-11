@@ -20,6 +20,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from chat_policy import DEFAULT_MAX_CONTEXT_CHARS, bounded_context_chunks, no_info_reply, positive_int_setting
+from embedding_retrieval import (
+    DEFAULT_EMBEDDING_MODEL,
+    load_valid_embedding_index,
+    semantic_top_chunks,
+    write_embedding_index,
+)
 from prompts import build_general_prompt, build_inconsistency_prompt, build_rag_prompt, build_safety_prompt
 
 
@@ -81,6 +87,9 @@ GLOBAL_CHUNKS_DIR = CHUNKS_ROOT / "global"
 CHUNK_MIN_WORDS = 40
 CHUNK_MAX_CHARS = 4000
 MAX_RAG_CONTEXT_CHARS = positive_int_setting(os.getenv("EMMA_MAX_CONTEXT_CHARS"), DEFAULT_MAX_CONTEXT_CHARS)
+EMBEDDING_MODEL_NAME = os.getenv("EMMA_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL).strip() or DEFAULT_EMBEDDING_MODEL
+RAG_TOP_K = positive_int_setting(os.getenv("EMMA_RAG_TOP_K"), 12)
+RAG_MAX_CHUNKS_PER_SOURCE = positive_int_setting(os.getenv("EMMA_RAG_MAX_CHUNKS_PER_SOURCE"), 4)
 API_KEYS_PATH = Path("api_keys.json")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 LEGACY_API_KEY_FILES = {
@@ -911,22 +920,45 @@ async def visible_chat_chunk_sources(user: dict, model: dict | None = None) -> l
     return sources
 
 
-async def load_visible_context_chunks(user: dict, model: dict | None = None) -> list[dict]:
-    """Load ordered visible safe chunks within the configured chat budget."""
-    context_chunks = []
+async def load_visible_context_chunks(user: dict, model: dict | None = None, question: str = "") -> list[dict]:
+    """Retrieve relevant chunks from visible safe RAGs within the context budget."""
+    semantic_sources = []
     for source in await visible_chat_chunk_sources(user, model):
-        for chunk in load_chunk_file(source["chunks_dir"], source["stem"]):
-            text = str(chunk.get("text", "")).strip()
-            if not text:
-                continue
-            index = chunk.get("index", len(context_chunks))
-            context_chunks.append(
-                {
-                    "source": f"{source['key']}#{int(index):04d}",
-                    "scope": source["scope"],
-                    "text": text,
-                }
-            )
+        json_path = source["chunks_dir"] / f"{source['stem']}.json"
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        chunks = data.get("chunks", []) if isinstance(data, dict) else []
+        if not isinstance(chunks, list) or not chunks:
+            continue
+        npy_path = source["chunks_dir"] / f"{source['stem']}.npy"
+        metadata = data.get("embeddings", {})
+        vectors = load_valid_embedding_index(npy_path, chunks, metadata, EMBEDDING_MODEL_NAME)
+        if vectors is None:
+            metadata = await asyncio.to_thread(write_embedding_index, npy_path, chunks, EMBEDDING_MODEL_NAME)
+            data["embeddings"] = metadata
+            json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            vectors = load_valid_embedding_index(npy_path, chunks, metadata, EMBEDDING_MODEL_NAME)
+        semantic_sources.append({**source, "chunks": chunks, "vectors": vectors})
+
+    ranked = await asyncio.to_thread(
+        semantic_top_chunks,
+        question,
+        semantic_sources,
+        RAG_TOP_K,
+        RAG_MAX_CHUNKS_PER_SOURCE,
+        EMBEDDING_MODEL_NAME,
+    )
+    context_chunks = [
+        {
+            "source": f"{chunk['source_key']}#{int(chunk.get('index', 0)):04d}",
+            "scope": chunk.get("scope"),
+            "text": str(chunk.get("text", "")).strip(),
+            "score": round(float(chunk.get("score", 0.0)), 4),
+        }
+        for chunk in ranked
+    ]
     return bounded_context_chunks(context_chunks, MAX_RAG_CONTEXT_CHARS)
 
 
@@ -1076,7 +1108,7 @@ async def process_rag_file(
         return
 
     output = {
-        "schema_version": 1,
+        "schema_version": 2,
         "source": txt_path.name,
         "stem": txt_path.stem,
         "scope": scope,
@@ -1101,6 +1133,13 @@ async def process_rag_file(
         ],
     }
     json_path = chunks_dir / f"{txt_path.stem}.json"
+    npy_path = chunks_dir / f"{txt_path.stem}.npy"
+    output["embeddings"] = await asyncio.to_thread(
+        write_embedding_index, npy_path, output["chunks"], EMBEDDING_MODEL_NAME
+    )
+    if not txt_path.exists():
+        npy_path.unlink(missing_ok=True)
+        return
     json_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
     save_description_to_index(txt_path.parent, txt_path.stem, build_document_description(text))
     security_index = prune_index_entries(txt_path.parent, "security_index.json")
@@ -2023,6 +2062,13 @@ async def health(user: dict = Depends(get_current_user)):
         "sources": sorted({model.get("source", "external_apis") for model in models}),
         "local_models": [model for model in models if model.get("source") == "local"],
         "external_api_models": [model for model in models if model.get("source") == "external_apis"],
+        "retrieval": {
+            "strategy": "local_semantic_embeddings",
+            "embedding_model": EMBEDDING_MODEL_NAME,
+            "top_k": RAG_TOP_K,
+            "max_chunks_per_source": RAG_MAX_CHUNKS_PER_SOURCE,
+            "max_context_chars": MAX_RAG_CONTEXT_CHARS,
+        },
     }
 
 
@@ -2344,7 +2390,7 @@ async def chat(
     if not question:
         raise HTTPException(status_code=400, detail="The last message is empty")
 
-    context_chunks = await load_visible_context_chunks(user, model)
+    context_chunks = await load_visible_context_chunks(user, model, question)
     safety = await analyze_user_message_safety(question, model)
     ai_messages = build_chat_messages_with_visible_context(req, context_chunks)
     audit_record = build_chat_audit_record(req, user, model, question, safety, context_chunks)

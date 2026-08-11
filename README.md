@@ -24,7 +24,7 @@ Current backend capabilities:
 - Role-based access control with `admin`, `user`, and `read_only`.
 - Admin user management for creating users, renaming usernames, changing roles, resetting passwords, disabling accounts, and deleting users.
 - Local source documents in `files/`.
-- Local JSON chunks in `chunks/`.
+- Local JSON chunks and regenerable NumPy embedding indexes in `chunks/`.
 - Conversation persistence and streaming chat responses.
 - A consistent warm, courteous, professional feminine voice for Emma's chat answers.
 - LangChain chat model integrations for local models and external APIs.
@@ -34,7 +34,7 @@ Current backend capabilities:
 - Suspicious RAG audit logs in `logs/rag_audit/`.
 - Suspicious chat manipulation audit logs in `logs/chat_audit/`.
 - Detailed exception logs in `logs/exception_log/`.
-- Chat context built from ordered visible safe chunks within a configurable character budget, not a relevance-based top-k limit.
+- Local multilingual semantic retrieval over visible safe chunks, with per-document diversity and a configurable context budget.
 - Untagged general-knowledge chat through the selected model when no visible safe chunked RAG is active.
 
 Current role model:
@@ -158,6 +158,9 @@ Environment variables are also supported:
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
 - `EMMA_MAX_CONTEXT_CHARS` (positive integer, defaults to `60000`)
+- `EMMA_EMBEDDING_MODEL` (defaults to `paraphrase-multilingual-MiniLM-L12-v2`)
+- `EMMA_RAG_TOP_K` (positive integer, defaults to `12`)
+- `EMMA_RAG_MAX_CHUNKS_PER_SOURCE` (positive integer, defaults to `4`)
 
 ---
 
@@ -233,6 +236,10 @@ Backend loads visible safe chunks for the user
       v
 High-risk RAGs are excluded from context
       v
+The question and safe chunks are embedded locally
+      v
+Chunks are ranked globally by cosine similarity with per-document diversity
+      v
 If no safe chunks remain, backend builds the general-chat prompt
       v
 Backend builds the RAG prompt from prompts.py
@@ -242,9 +249,11 @@ Selected LangChain chat model streams or returns the answer
 Response streams without a grounding tag in general mode
 ```
 
-This rebuilt flow intentionally does not use embeddings, `.npy` files, router prompts, or relevance-based top-k retrieval. Ordered visible safe chunks are admitted whole until the `EMMA_MAX_CONTEXT_CHARS` budget is reached; the default is 60,000 characters. When no visible safe chunks fit or exist—including when every chunked RAG is blocked as high risk—Emma uses the selected model as a general-purpose LLM and returns an untagged answer.
+Emma 3.0 uses `paraphrase-multilingual-MiniLM-L12-v2` locally by default. Ingestion stores chunk metadata in JSON and normalized vectors in a matching `.npy` file. A fingerprint in the JSON binds the vectors to the exact chunks; missing, stale, or model-mismatched indexes are regenerated lazily. Document text is not sent to an external embedding API.
 
-The budget preserves source and chunk order and never splits a chunk. Set `EMMA_MAX_CONTEXT_CHARS` before startup to tune the limit for the context window of the local or external models in use. Invalid and non-positive values fall back to the default.
+The embedding model is loaded only when indexing or retrieval first needs it. Its initial use may download the model into the normal Hugging Face cache; subsequent use is local. Startup itself does not load the model.
+
+Retrieval searches all visible safe RAGs directly instead of asking a chat model to route to probable files. It selects up to `EMMA_RAG_TOP_K` results globally, limits each source with `EMMA_RAG_MAX_CHUNKS_PER_SOURCE`, and then admits whole ranked chunks until `EMMA_MAX_CONTEXT_CHARS` is reached. When no safe result exists—including when every RAG is blocked as high risk—Emma uses general mode and returns an untagged answer.
 
 ---
 
@@ -252,7 +261,7 @@ The budget preserves source and chunk order and never splits a chunk. Set `EMMA_
 
 1. Open `http://localhost:8650/ui/upload.html`.
 2. Drag and drop a `.txt` file.
-3. The server chunks the document and stores local JSON chunk files.
+3. The server chunks the document and stores local JSON metadata plus a regenerable `.npy` embedding index.
 4. The server checks the new document for likely prompt injection.
 5. The server checks for likely inconsistencies against visible RAGs.
 6. The document becomes available to chat if it is not marked `high` risk.

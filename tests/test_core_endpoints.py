@@ -8,6 +8,16 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 
+class FakeEmbeddingModel:
+    """Return small deterministic local vectors without downloading a model."""
+
+    def encode(self, texts, **_kwargs):
+        """Encode text from stable character statistics."""
+        import numpy as np
+
+        return np.asarray([[len(text), text.lower().count("a") + 1, text.lower().count("e") + 1] for text in texts])
+
+
 class CoreEndpointTests(unittest.TestCase):
     """Integration-style tests for Emma's core HTTP endpoints."""
     @classmethod
@@ -19,6 +29,8 @@ class CoreEndpointTests(unittest.TestCase):
         """Create an isolated runtime workspace for each test."""
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
+        import embedding_retrieval
+        embedding_retrieval.set_embedding_model(FakeEmbeddingModel())
         self.original_fetch_local_model_names = self.server.fetch_local_model_names
         self.original_local_models_env = {
             "OLLAMA_MODELS": self.server.os.environ.pop("OLLAMA_MODELS", None),
@@ -259,7 +271,7 @@ class CoreEndpointTests(unittest.TestCase):
         names = [file["name"] for file in files]
         self.assertIn("policy.txt", names)
         policy = next(file for file in files if file["name"] == "policy.txt")
-        self.assertIn(policy["inconsistencies"]["status"], {"checking", "checked"})
+        self.assertIn(policy["inconsistencies"]["status"], {"unindexed", "checking", "checked"})
 
         download_response = self.client.get("/files/user/policy/download", headers=headers)
         self.assertEqual(download_response.status_code, 200, download_response.text)
@@ -609,7 +621,7 @@ class CoreEndpointTests(unittest.TestCase):
         self.server.resolve_model = fake_resolve_model
         self.server.generate_ai_reply = fake_generate_ai_reply
         self.server.generate_ai_reply_stream = fake_generate_ai_reply_stream
-        self.server.load_visible_context_chunks = lambda _user, _model=None: asyncio.sleep(
+        self.server.load_visible_context_chunks = lambda _user, _model=None, _question="": asyncio.sleep(
             0,
             result=[{"source": "test#0000", "text": "Streaming context for endpoint testing."}],
         )

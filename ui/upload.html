@@ -553,6 +553,16 @@
       transition: width 0.3s ease;
     }
 
+    .progress-bar.indeterminate {
+      width: 35% !important;
+      animation: progress-slide 1.2s ease-in-out infinite;
+    }
+
+    @keyframes progress-slide {
+      0% { transform: translateX(-110%); }
+      100% { transform: translateX(300%); }
+    }
+
     /* ── UPLOAD BUTTON ── */
     .upload-actions {
       display: flex;
@@ -966,6 +976,7 @@
           <div class="file-info">
             <div class="file-name">${escHtml(f.name)}</div>
             <div class="file-meta">${formatSize(f.size)}${hasDuplicateIndexedName(f.name) ? ' · Name already exists' : ''}</div>
+            <div class="progress-wrap" style="display:none"><div class="progress-bar" style="width:0%"></div></div>
           </div>
           <div class="file-status">
             <div class="status-dot pending"></div>
@@ -983,6 +994,53 @@
       const txt = item.querySelector('.status-text');
       txt.className = 'status-text ' + status;
       txt.textContent = label;
+    }
+
+    function setItemProgress(name, percent = null, indeterminate = false) {
+      const item = document.getElementById('item-' + CSS.escape(name));
+      if (!item) return;
+      const wrap = item.querySelector('.progress-wrap');
+      const bar = item.querySelector('.progress-bar');
+      if (!wrap || !bar) return;
+      wrap.style.display = 'block';
+      bar.classList.toggle('indeterminate', indeterminate);
+      if (!indeterminate) bar.style.width = `${Math.max(0, Math.min(100, percent || 0))}%`;
+    }
+
+    function uploadFileWithProgress(file, scope) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const form = new FormData();
+        form.append('file', file);
+        xhr.open('POST', `${BASE_URL}/upload?scope=${encodeURIComponent(scope)}`);
+        const token = getToken();
+        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.upload.onprogress = event => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            setItemProgress(file.name, percent, false);
+            setItemStatus(file.name, 'indexing', `Uploading ${percent}%`);
+          }
+        };
+        xhr.upload.onload = () => {
+          setItemProgress(file.name, 100, true);
+          setItemStatus(file.name, 'indexing', 'Security check…');
+        };
+        xhr.onerror = () => reject(new Error('Server unreachable'));
+        xhr.onload = () => {
+          if (xhr.status === 401) {
+            localStorage.removeItem('emma_token');
+            window.location.href = '/ui/login.html';
+            reject(new Error('Unauthorized'));
+            return;
+          }
+          let data = {};
+          try { data = JSON.parse(xhr.responseText || '{}'); } catch {}
+          if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+          else reject(new Error(data.detail || `HTTP ${xhr.status}`));
+        };
+        xhr.send(form);
+      });
     }
 
     function escAttr(s) {
@@ -1168,19 +1226,12 @@
     }
 
     function hasPendingConflictChecks(files = indexedFilesCache) {
-      return files.some(f => f.inconsistencies && f.inconsistencies.status === 'checking');
+      return files.some(f => !f.indexed || (f.inconsistencies && f.inconsistencies.status === 'checking'));
     }
 
-    async function pollIndexedAfterUpload(attempts = 8, delayMs = 2500) {
-      for (let i = 0; i < attempts; i++) {
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-        await loadIndexed();
-        const hasIndexing = indexedFilesCache.some(f => !f.indexed);
-        const hasCheckingConflicts = hasPendingConflictChecks();
-        const hasConflicts = indexedFilesCache.some(f => f.inconsistencies && f.inconsistencies.has_any);
-        if (!hasIndexing && !hasCheckingConflicts) return;
-        if (!hasIndexing && hasConflicts) return;
-      }
+    async function pollIndexedAfterUpload() {
+      await loadIndexed();
+      ensureConflictPoll();
     }
 
     function ensureConflictPoll() {
@@ -1188,7 +1239,7 @@
       conflictPollActive = true;
       (async () => {
         try {
-          for (let i = 0; i < 12; i++) {
+          for (let i = 0; i < 240; i++) {
             await new Promise(resolve => setTimeout(resolve, 2500));
             await loadIndexed();
             if (!hasPendingConflictChecks()) break;
@@ -1213,13 +1264,12 @@
 
       for (const file of pendingFiles) {
         setItemStatus(file.name, 'indexing', 'Uploading…');
+        setItemProgress(file.name, 0, false);
         try {
-          const form = new FormData();
-          form.append('file', file);
-          const res = await authFetch(`/upload?scope=${scope}`, { method: 'POST', body: form });
-          if (res.ok) {
-            const data = await res.json();
+          const data = await uploadFileWithProgress(file, scope);
+          {
             setItemStatus(file.name, 'indexing', 'Indexing…');
+            setItemProgress(file.name, 100, true);
             if (data.duplicate_name) {
               showToast(`"${file.name}" replaced an existing ${scope === 'global' ? 'global' : 'personal'} RAG`, 'error');
             }
@@ -1234,10 +1284,6 @@
               showToast(`Detected possible prompt injection in "${file.name}"`, 'error');
             }
             success++;
-          } else {
-            setItemStatus(file.name, 'error', 'Error');
-            remainingFiles.push(file);
-            failed++;
           }
         } catch (err) {
           if (err.message !== 'Unauthorized') {
@@ -1332,7 +1378,7 @@
             ${hasSecurityRisk ? renderHighRiskExclusionNotice(f.security) : ''}
             ${hasConflicts ? renderConflictDetails(f.inconsistencies) : ''}
             ${hasSecurityRisk ? renderSecurityDetails(f.security) : ''}
-            ${f.indexed ? `<div class="progress-wrap"><div class="progress-bar" style="width:100%"></div></div>` : ''}
+            <div class="progress-wrap"><div class="progress-bar${f.indexed ? '' : ' indeterminate'}" style="width:${f.indexed ? '100%' : '35%'}"></div></div>
           </div>
           <div class="file-status">
             <div class="status-dot ${(hasConflicts || hasSecurityRisk) ? 'error' : (checkingConflicts || !f.indexed ? 'indexing' : 'ready')}"></div>
