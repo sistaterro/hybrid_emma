@@ -653,7 +653,7 @@
       <a class="nav-item" href="#privacy">Privacy</a>
     </div>
 
-    <div class="sidebar-footer">Emma v3.0 · MIT License</div>
+    <div class="sidebar-footer">Emma v2.0 · MIT License</div>
   </div>
 
   <!-- MAIN -->
@@ -792,7 +792,6 @@ pip install -r requirements.txt</code></pre>
       <p class="section-sub">How Emma chooses between document-based and general answers</p>
 
       <p>When safe documents are available to your account, Emma uses them to answer your questions. Global documents are available to everyone, while personal documents are available only to their owner and administrators.</p>
-      <p>Emma 3.0 uses a small multilingual Sentence Transformers model for semantic search. The model loads on first use, creates embeddings locally, and stores regenerable NumPy indexes next to the JSON chunks. It does not send document text to an external embedding service.</p>
       <p>If no safe indexed document is available, Emma works like a general-purpose AI assistant and answers without a response tag. A document blocked for high security risk is never included in the answer.</p>
 
       <div class="flow">
@@ -813,8 +812,8 @@ pip install -r requirements.txt</code></pre>
         <div class="flow-step">
           <div class="flow-num">3</div>
           <div class="flow-content">
-            <div class="flow-title">Semantic retrieval</div>
-            <div class="flow-desc">A small multilingual model converts the question and chunks into local vectors. Emma ranks chunks by meaning across every visible safe document and limits how many one source can contribute.</div>
+            <div class="flow-title">Answer mode</div>
+            <div class="flow-desc">Emma uses document mode when safe knowledge is available and general mode when it is not.</div>
           </div>
         </div>
         <div class="flow-step">
@@ -840,8 +839,8 @@ pip install -r requirements.txt</code></pre>
         <div class="flow-step">
           <div class="flow-num">1</div>
           <div class="flow-content">
-            <div class="flow-title">Chunking and embeddings</div>
-            <div class="flow-desc">Emma splits the text into quality chunks and converts each chunk locally into an embedding. JSON metadata and a regenerable <code>.npy</code> vector index are stored together.</div>
+            <div class="flow-title">Processing</div>
+            <div class="flow-desc">Emma reads and indexes the text so it can be used in future conversations.</div>
           </div>
         </div>
         <div class="flow-step">

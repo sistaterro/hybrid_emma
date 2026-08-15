@@ -8,24 +8,6 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 
-class FakeEmbeddingModel:
-    """Return deterministic semantic vectors for RAG integration tests."""
-
-    def encode(self, texts, **_kwargs):
-        """Encode selected concepts into a compact test vector."""
-        import numpy as np
-
-        vectors = []
-        for text in texts:
-            lowered = text.lower()
-            vectors.append([
-                lowered.count("discount") + lowered.count("descuento") + 1,
-                lowered.count("coffee") + lowered.count("cafe") + 1,
-                lowered.count("meat") + lowered.count("carne") + 1,
-            ])
-        return np.asarray(vectors, dtype=float)
-
-
 LONG_DISCOUNT_TEXT = """
 Store discount policy for the butcher counter and meat products.
 
@@ -77,8 +59,6 @@ class RagPipelineTests(unittest.TestCase):
         """Create an isolated runtime workspace for each test."""
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        import embedding_retrieval
-        embedding_retrieval.set_embedding_model(FakeEmbeddingModel())
         self.server.DB_PATH = self.root / "emma.db"
         self.server.FILES_ROOT = self.root / "files"
         self.server.CHUNKS_ROOT = self.root / "chunks"

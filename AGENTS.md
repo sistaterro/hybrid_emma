@@ -10,7 +10,7 @@ When the request is to "update documentation", the expected scope in this projec
 - `ui/Docs.html`
 - `AGENTS.md`
 
-Keep these three documents aligned with the active Hybrid Emma behavior: LangChain-backed local models and external APIs, JSON RAG chunks with local embedding indexes, semantic retrieval, streaming chat, general untagged chat when no safe chunked RAG is active, RAG prompt-injection screening, audit logs, exception logs, and exclusion of high-risk RAGs from chat context.
+Keep these three documents aligned with the active Hybrid Emma behavior: LangChain-backed local models and external APIs, JSON-only RAG chunks, streaming chat, general untagged chat when no safe chunked RAG is active, RAG prompt-injection screening, audit logs, exception logs, and exclusion of high-risk RAGs from chat context.
 
 ## Project Summary
 
@@ -58,12 +58,8 @@ The rebuild goal is to keep endpoint behavior explicit while moving model calls 
   - Do not reintroduce routing prompts for "most relevant" files unless the RAG strategy changes again.
 
 - `chat_policy.py`
-  - Pure policies for whole-chunk RAG context budgeting and common-language detection.
+  - Pure policies for ordered RAG context budgeting and common-language detection.
   - Keep these policies independent from FastAPI and runtime persistence so they remain cheap to unit test.
-
-- `embedding_retrieval.py`
-  - Canonical location for lazy local embedding model loading, chunk-index fingerprints, NumPy index validation, cosine ranking, and per-source retrieval diversity.
-  - Keep provider-independent vector logic here and preserve deterministic test injection through `set_embedding_model(...)`.
 
 - `rag_security.py`
   - Canonical location for RAG prompt-injection security analysis, security index persistence, high-risk exclusion decisions, and suspicious RAG audit log creation/rotation.
@@ -158,7 +154,7 @@ Recommended convention:
 
 Avoid prompt classes without real state.
 
-Current RAG strategy deliberately does not route to "probable" files with another chat-model call. It embeds the question locally, ranks chunks across every visible safe RAG, applies a per-source diversity limit, and admits whole results until the `EMMA_MAX_CONTEXT_CHARS` budget is reached. RAGs marked with `security.risk == "high"` are excluded before retrieval. If no visible safe chunks are available, chat uses `build_general_prompt(...)` and the selected model as a general-purpose LLM without grounding tags.
+Current RAG strategy deliberately does not route to "probable" files or use relevance-based top-k retrieval. Chat loads ordered visible safe chunks until the `EMMA_MAX_CONTEXT_CHARS` budget is reached and lets the selected model reason over that bounded context. RAGs marked with `security.risk == "high"` are excluded from chat context. If no visible safe chunks are available, chat uses `build_general_prompt(...)` and the selected model as a general-purpose LLM without grounding tags.
 
 ### 4. Protect Visual State
 
@@ -193,9 +189,8 @@ Practical rule:
 - Keep API keys server-side only. `/health` may report available local models, external API models, providers, and sources, but must never return secret values.
 - Users created by an administrator and users receiving a password reset must have `must_change_password` set. While it is set, backend access is limited to `/auth/me`, `/auth/logout`, and `/auth/change-password`.
 - Password changes require the current password, a different new password of at least eight characters, and invalidation of every other session belonging to that user. Preserve the current bearer session so the UI can continue without another login.
-- `EMMA_MAX_CONTEXT_CHARS`, `EMMA_RAG_TOP_K`, and `EMMA_RAG_MAX_CHUNKS_PER_SOURCE` are parsed through `positive_int_setting(...)`. Context admission follows semantic rank, keeps chunks whole, and stops at the first chunk that would exceed the budget. Do not silently truncate chunk text.
-- RAG ingestion writes canonical chunks and embedding metadata as JSON plus normalized local vectors as `.npy`. The JSON fingerprint binds the index to exact chunk content. Treat `.npy` indexes as regenerable derived state and rebuild them lazily when missing, stale, or created with another embedding model.
-- The default embedding model is `paraphrase-multilingual-MiniLM-L12-v2`, configurable with `EMMA_EMBEDDING_MODEL`. Load it lazily and never send RAG text to an external embedding API.
+- `EMMA_MAX_CONTEXT_CHARS` is parsed through `positive_int_setting(...)`. Context admission preserves order, keeps chunks whole, and stops at the first chunk that would exceed the budget. Do not silently truncate chunk text.
+- RAG ingestion writes chunks as JSON only. Embeddings and `.npy` files are not part of the current rebuilt flow.
 - Inconsistency detection is asynchronous and persisted in `conflicts_index.json`.
 - RAG prompt-injection detection is model-based, multilingual, lives in `rag_security.py`, runs during ingestion, and persists results in `security_index.json` next to the RAG files.
 - Missing RAG security records may be created lazily by chat using the currently selected chat model before chunks are allowed into context.
@@ -225,7 +220,7 @@ Practical rule:
 - Home-screen entry cards should open their destination in a new browser tab/window. On secondary screens, the existing logo/status surface in the upper sidebar should be clickable and return to `ui/index.html`; do not add a separate floating home button.
 - If a screen does not apply to a role, hide it and block direct access when appropriate.
 - In `ui/login.html`, preserve the `[hidden] { display: none !important; }` safeguard so the temporary-password form does not appear alongside the normal login form.
-- Visible UI version references use Emma 3.0 for the semantic-retrieval release.
+- Visible UI version references currently use Emma 2.0 until a product-wide version bump is intentionally applied.
 
 ## Execution And Verification
 
@@ -242,8 +237,7 @@ Recommended workflow:
 
 Current automated tests:
 
-- `tests/test_chat_policy.py` covers whole-chunk budgeting, safe environment-setting fallback, common-language detection, and localized deterministic replies.
-- `tests/test_embedding_retrieval.py` covers embedding-index fingerprints, stale-index rejection, global semantic ranking, and per-source diversity.
+- `tests/test_chat_policy.py` covers ordered whole-chunk budgeting, safe environment-setting fallback, common-language detection, and localized deterministic replies.
 - `tests/test_permissions.py` covers role restrictions for admin/file-management behavior.
 - `tests/test_rag_pipeline.py` covers chunk ingestion, file indexes, mocked inconsistency persistence, clean conflict checks, orphaned conflict pruning, chat prompt construction with visible safe chunks, and exclusion of high-risk RAGs from chat context.
 - `tests/test_core_endpoints.py` covers auth, forced temporary-password replacement, admin user management including username renames, conversation CRUD, file upload/list/download/delete, model catalog behavior, LangChain missing-dependency errors, and `/chat` streaming persistence.
@@ -263,7 +257,7 @@ Useful manual smoke tests after changes:
 - user management from admin;
 - chat creation, deletion, and recreation;
 - streaming chat responses appearing incrementally in `chat.html` and `chat_evil_emma.html`;
-- ask chat a question that requires multiple safe RAGs and confirm semantic retrieval selects relevant chunks from more than one source within the configured limits;
+- ask chat a question that requires multiple safe RAGs and confirm it answers from the ordered safe chunks admitted by the configured context budget;
 - index and conflict consistency when a file is deleted.
 
 ## Known Technical Debt
@@ -291,7 +285,7 @@ Current rebuild status:
 3. Conversation persistence: rebuilt.
 4. Local/external model selection: rebuilt using LangChain integrations.
 5. Upload, chunk ingestion, inconsistency detection, and RAG prompt-injection detection/auditing: rebuilt.
-6. Chat: rebuilt using local multilingual embeddings and globally ranked visible safe chunks with per-source diversity, excludes high-risk RAGs before retrieval, switches to untagged general-model answers when no safe chunked RAG is active, enforces grounding tags for RAG mode, and supports real LangChain streaming for streamed requests.
+6. Chat: rebuilt using bounded ordered visible safe chunks instead of relevance-based top-k retrieval, excludes high-risk RAGs from context, switches to untagged general-model answers when no safe chunked RAG is active, enforces grounding tags for RAG mode, and supports real LangChain streaming for streamed requests.
 7. Tests: active and expected to pass.
 
 Likely next work:
