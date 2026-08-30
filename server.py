@@ -1536,37 +1536,6 @@ def store_chat_messages(conversation_id: str | None, user_id: int, messages: lis
     conn.close()
 
 
-def response_tag(text: str) -> str | None:
-    """Extract Emma's leading grounding tag from a response."""
-    stripped = text.strip()
-    for tag in ("[RAG]", "[DRIFT]", "[NO INFO]"):
-        if stripped.startswith(tag):
-            return tag
-    return None
-
-
-def fallback_response_tag(context_chunks: list[dict]) -> str:
-    """Return the conservative grounding tag when a model omits one."""
-    return "[DRIFT]" if context_chunks else "[NO INFO]"
-
-
-def ensure_response_tag(text: str, context_chunks: list[dict]) -> str:
-    """Prefix a response with a conservative grounding tag if the model omitted it."""
-    if response_tag(text):
-        return text
-    prefix = fallback_response_tag(context_chunks)
-    return f"{prefix}\n{text.lstrip()}" if text.strip() else f"{prefix}\n"
-
-
-def remove_response_tag(text: str) -> str:
-    """Remove an accidental grounding tag from a general-mode response."""
-    tag = response_tag(text)
-    if not tag:
-        return text
-    leading_length = len(text) - len(text.lstrip())
-    return text[leading_length + len(tag) :].lstrip("\r\n ")
-
-
 def build_no_info_reply(question: str) -> str:
     """Build a deterministic no-context reply in the user's likely language."""
     return no_info_reply(question)
@@ -1581,7 +1550,6 @@ async def stream_static_chat_reply_as_json_lines(
     """Stream a backend-generated reply and persist it like a model response."""
     store_chat_messages(req.conversation_id, user["id"], req.messages, reply)
     audit_record["response"] = {
-        "tag": response_tag(reply),
         "length": len(reply),
     }
     persist_suspicious_chat_audit_log(audit_record)
@@ -1597,84 +1565,15 @@ async def stream_chat_as_json_lines(
     audit_record: dict,
     context_chunks: list[dict],
 ):
-    """Stream chat chunks as newline-delimited JSON and persist the final reply."""
+    """Stream model output unchanged and persist the final reply."""
     reply_parts = []
-    if not context_chunks:
-        prefix_checked = False
-        buffered_start = ""
-        possible_tags = ("[RAG]", "[DRIFT]", "[NO INFO]")
-        async for piece in generate_ai_reply_stream(model, messages):
-            if not prefix_checked:
-                buffered_start += piece
-                stripped_start = buffered_start.lstrip()
-                if response_tag(buffered_start):
-                    prefix_checked = True
-                    clean_start = remove_response_tag(buffered_start)
-                    if clean_start:
-                        reply_parts.append(clean_start)
-                        yield json.dumps({"text": clean_start, "done": False}) + "\n"
-                    buffered_start = ""
-                elif any(tag.startswith(stripped_start) for tag in possible_tags):
-                    continue
-                else:
-                    prefix_checked = True
-                    reply_parts.append(buffered_start)
-                    yield json.dumps({"text": buffered_start, "done": False}) + "\n"
-                    buffered_start = ""
-                continue
-            reply_parts.append(piece)
-            yield json.dumps({"text": piece, "done": False}) + "\n"
-
-        if not prefix_checked and buffered_start:
-            clean_start = remove_response_tag(buffered_start)
-            if clean_start:
-                reply_parts.append(clean_start)
-                yield json.dumps({"text": clean_start, "done": False}) + "\n"
-
-        reply = "".join(reply_parts)
-        store_chat_messages(req.conversation_id, user["id"], req.messages, reply)
-        audit_record["response"] = {"tag": None, "length": len(reply)}
-        persist_suspicious_chat_audit_log(audit_record)
-        yield json.dumps({"text": "", "done": True}) + "\n"
-        return
-
-    prefix_checked = False
-    buffered_start = ""
-    possible_tags = ("[RAG]", "[DRIFT]", "[NO INFO]")
-
     async for piece in generate_ai_reply_stream(model, messages):
-        if not prefix_checked:
-            buffered_start += piece
-            stripped_start = buffered_start.lstrip()
-            if response_tag(buffered_start):
-                prefix_checked = True
-                reply_parts.append(buffered_start)
-                yield json.dumps({"text": buffered_start, "done": False}) + "\n"
-                buffered_start = ""
-            elif any(tag.startswith(stripped_start) for tag in possible_tags):
-                continue
-            else:
-                prefix_checked = True
-                tagged_start = ensure_response_tag(buffered_start, context_chunks)
-                reply_parts.append(tagged_start)
-                yield json.dumps({"text": tagged_start, "done": False}) + "\n"
-                buffered_start = ""
-            continue
-
         reply_parts.append(piece)
         yield json.dumps({"text": piece, "done": False}) + "\n"
 
-    if not prefix_checked and buffered_start:
-        tagged_start = ensure_response_tag(buffered_start, context_chunks)
-        reply_parts.append(tagged_start)
-        yield json.dumps({"text": tagged_start, "done": False}) + "\n"
-
     reply = "".join(reply_parts)
     store_chat_messages(req.conversation_id, user["id"], req.messages, reply)
-    audit_record["response"] = {
-        "tag": response_tag(reply),
-        "length": len(reply),
-    }
+    audit_record["response"] = {"length": len(reply)}
     persist_suspicious_chat_audit_log(audit_record)
     yield json.dumps({"text": "", "done": True}) + "\n"
 
@@ -2372,21 +2271,13 @@ async def chat(
         )
 
     reply = await generate_ai_reply(model, ai_messages)
-    if context_chunks:
-        reply = ensure_response_tag(reply, context_chunks)
-    else:
-        reply = remove_response_tag(reply)
     store_chat_messages(req.conversation_id, user["id"], req.messages, reply)
 
-    audit_record["response"] = {
-        "tag": response_tag(reply),
-        "length": len(reply),
-    }
+    audit_record["response"] = {"length": len(reply)}
     persist_suspicious_chat_audit_log(audit_record)
 
     return {
         "model": model["id"],
-        "tag": response_tag(reply),
         "message": {"role": "assistant", "content": reply},
     }
 

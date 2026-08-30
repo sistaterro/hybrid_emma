@@ -197,8 +197,7 @@ Practical rule:
 - RAG security levels are `none`, `medium`, and `high`; treat `high` as dangerous for the system and `medium` as requiring review.
 - Chat must not use RAG chunks whose prompt-injection security result is `high`. `visible_chat_chunk_sources(...)` is responsible for filtering them out, and it creates a missing security assessment lazily before a RAG can be used.
 - Chat must use the general-purpose model prompt when no visible safe chunked RAG is active, including when all chunked RAGs are excluded as high risk. Do not expose blocked RAG text to that prompt.
-- General-mode answers must not contain `[RAG]`, `[DRIFT]`, or `[NO INFO]`; remove an accidental leading grounding tag before returning or persisting the reply.
-- When active safe context exists and a selected model omits the required leading response tag, the backend must add the conservative `[DRIFT]` tag.
+- Chat answers are not required to contain grounding tags. The backend must preserve model output naturally in both general and RAG modes.
 - `/files` is responsible for surfacing persisted conflict state and scheduling missing checks for indexed RAGs that have no conflict record yet.
 - `/files` also surfaces persisted `security` state for prompt-injection findings.
 - When deleting RAGs, prune both direct `conflicts_index.json` entries and orphaned `matches` that reference deleted files.
@@ -352,7 +351,7 @@ Current rebuild status:
 3. Conversation persistence: rebuilt.
 4. Local/external model selection: rebuilt using LangChain integrations.
 5. Upload, chunk ingestion, inconsistency detection, and RAG prompt-injection detection/auditing: rebuilt.
-6. Chat: rebuilt using bounded ordered visible safe chunks instead of relevance-based top-k retrieval, excludes high-risk RAGs from context, switches to untagged general-model answers when no safe chunked RAG is active, enforces grounding tags for RAG mode, and supports real LangChain streaming for streamed requests.
+6. Chat: rebuilt using bounded ordered visible safe chunks instead of relevance-based top-k retrieval, excludes high-risk RAGs from context, switches to general-model answers when no safe chunked RAG is active, does not impose grounding tags, and supports real LangChain streaming for streamed requests.
 7. Tests: active and expected to pass.
 
 Likely next work:
