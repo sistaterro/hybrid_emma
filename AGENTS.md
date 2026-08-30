@@ -333,6 +333,109 @@ Commit complete lifecycle cleanup and removal of superseded retrieval code.
 - ChromaDB is a rebuildable retrieval index. The original `.txt` files remain the canonical source, while JSON chunks may be retained only as a transitional or diagnostic representation.
 - The absence of a fully functional system between commits is acceptable for this branch. Before final handoff, run the complete test suite and document any intentional contract changes.
 
+## Vector Database Technical-Debt Milestones
+
+After the CRUD migration, address the remaining vector-database debt in the following order. Each milestone should be independently reviewable and should not mix unrelated product or UI changes.
+
+### Milestone 1 — Stable embedding runtime
+
+Goal: ensure ChromaDB and the embedding model are initialized once per process and fail clearly.
+
+- Cache the persistent ChromaDB client, collection, and embedding function instead of constructing them on every request.
+- Centralize embedding configuration, including model name, database path, offline mode, and collection name.
+- Resolve the default database path independently of the process working directory, or require an explicit absolute path.
+- Add clear error handling for missing packages, missing offline model files, and failed embedding initialization.
+- Confirm that startup and the first ingestion/query do not repeatedly reload model weights.
+
+Definition of done: repeated chat queries reuse the initialized embedding runtime, offline startup works with the cached model, and failures produce actionable backend logs/responses.
+
+Suggested commit: `perf: stabilize embedding runtime`.
+
+### Milestone 2 — Retrieval quality policy
+
+Goal: prevent unrelated chunks from activating grounded RAG mode.
+
+- Add configurable top-k and minimum relevance/distance settings.
+- Apply the relevance threshold before building the RAG prompt.
+- Preserve the general prompt when no result passes the threshold.
+- Keep the existing context character budget as a second safety limit after semantic filtering.
+- Add tests for relevant results, irrelevant questions, empty collections, ties, and mixed global/user results.
+
+Definition of done: retrieval has an explicit, tested meaning of “relevant” and cannot fall back to arbitrary nearest neighbors.
+
+Suggested commit: `feat: add rag retrieval thresholds`.
+
+### Milestone 3 — Reindexing and migration tooling
+
+Goal: make the vector index fully rebuildable from canonical source files.
+
+- Add an explicit administrative or startup-safe reindex operation.
+- Walk global and user `.txt` sources, re-run the existing chunker, security assessment, and vector insertion.
+- Make reindexing idempotent and safe to repeat.
+- Detect model-name or chunking-configuration changes and mark affected RAGs for reindexing.
+- Report per-RAG success/failure and leave source files untouched when a vector operation fails.
+- Add a migration check for source files that have chunks JSON but no corresponding ChromaDB records.
+
+Definition of done: deleting `chroma_db/` and running the supported reindex operation reconstructs the usable vector index without manual file editing.
+
+Suggested commit: `feat: add rebuildable rag reindexing`.
+
+### Milestone 4 — Consistent update and failure recovery
+
+Goal: prevent partial replacement states during asynchronous ingestion.
+
+- Replace delete-then-insert with a staged or versioned replacement strategy.
+- Do not expose a new vector version until all chunks are inserted successfully.
+- Keep old vectors available until the replacement is complete, then remove them.
+- Persist vector indexing status and errors in the file metadata returned by `/files`.
+- Verify the source still exists before publishing derived vector state.
+- Add tests for insertion failure, deletion during ingestion, process restart, and retry.
+
+Definition of done: an interrupted update leaves either the previous complete index or the new complete index, never a silently partial one.
+
+Suggested commit: `fix: make rag vector updates recoverable`.
+
+### Milestone 5 — Security metadata consistency
+
+Goal: ensure ChromaDB filtering and persisted security indexes cannot disagree.
+
+- Decide whether high-risk chunks remain in the collection or move to a separate quarantine collection.
+- Synchronize the current security assessment into vector metadata whenever a RAG is rescanned.
+- Make lazy security assessment update or invalidate affected vector records before retrieval.
+- Add integrity checks comparing source security state with vector metadata.
+- Test missing, stale, medium-risk, and high-risk security records.
+
+Definition of done: no chunk can be retrieved solely because its ChromaDB metadata is stale or its JSON security record is missing.
+
+Suggested commit: `fix: synchronize rag security metadata`.
+
+### Milestone 6 — Complete lifecycle cleanup
+
+Goal: remove obsolete retrieval assumptions and make deletion reliable.
+
+- Decide whether JSON chunks remain a supported backup/diagnostic artifact or are removed from runtime reads.
+- Remove legacy ordered-context retrieval once its replacement is fully covered.
+- Remove obsolete `.npy` handling if no supported data can use it.
+- Make deletion remove vectors, source files, derived indexes, logs where appropriate, and orphaned records with ownership checks.
+- Ensure deletion remains recoverable or reports cleanup-pending state when ChromaDB is unavailable.
+
+Definition of done: CRUD behavior, source-of-truth policy, and recovery behavior are explicit, tested, and free of dead retrieval paths.
+
+Suggested commit: `refactor: retire legacy rag retrieval`.
+
+### Milestone 7 — Documentation and operational verification
+
+Goal: align project documentation and production-like checks with the vector-backed architecture.
+
+- Update README, built-in docs, AGENTS, and UI status text to describe ChromaDB, embeddings, persistence, reindexing, and offline model requirements.
+- Add vector-store tests with mocked embeddings and a small integration test against a temporary persistent ChromaDB directory.
+- Run the full test suite, syntax checks, upload/update/delete smoke tests, restart persistence checks, and offline startup checks.
+- Document how to rebuild the vector database and how to recover from a corrupted or deleted `chroma_db/` directory.
+
+Definition of done: a new maintainer can understand, test, rebuild, and operate the vector-backed RAG flow without relying on undocumented manual steps.
+
+Suggested commit: `docs: document vector rag operations`.
+
 ## What To Do When Inheriting This Repo
 
 Recommended order to understand it:
