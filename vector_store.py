@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -12,9 +13,13 @@ DEFAULT_EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 DEFAULT_COLLECTION_NAME = "emma_rag_chunks"
 
 
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+
 def vector_db_path() -> Path:
     """Return the configured persistent ChromaDB directory."""
-    return Path(os.getenv("EMMA_VECTOR_DB_PATH", "chroma_db"))
+    configured = os.getenv("EMMA_VECTOR_DB_PATH")
+    return Path(configured) if configured else PROJECT_ROOT / "chroma_db"
 
 
 def embedding_model_name() -> str:
@@ -22,22 +27,32 @@ def embedding_model_name() -> str:
     return os.getenv("EMMA_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
 
 
+@lru_cache(maxsize=1)
 def get_collection():
     """Open the persistent Emma ChromaDB collection."""
-    import chromadb
-    from chromadb.utils import embedding_functions
+    try:
+        import chromadb
+        from chromadb.utils import embedding_functions
+    except ImportError as exc:
+        raise RuntimeError("ChromaDB dependencies are not installed") from exc
 
     database_path = vector_db_path()
     database_path.mkdir(parents=True, exist_ok=True)
-    client = chromadb.PersistentClient(path=str(database_path))
-    embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name=embedding_model_name()
-    )
-    return client.get_or_create_collection(
-        name=DEFAULT_COLLECTION_NAME,
-        embedding_function=embedding_function,
-        metadata={"embedding_model": embedding_model_name()},
-    )
+    try:
+        embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name=embedding_model_name()
+        )
+        client = chromadb.PersistentClient(path=str(database_path))
+        return client.get_or_create_collection(
+            name=DEFAULT_COLLECTION_NAME,
+            embedding_function=embedding_function,
+            metadata={"embedding_model": embedding_model_name()},
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Could not initialize the local embedding model '{embedding_model_name()}'. "
+            "Verify that it is available in the local Hugging Face cache."
+        ) from exc
 
 
 def chunk_id(scope: str, owner_id: int | None, stem: str, index: int) -> str:
