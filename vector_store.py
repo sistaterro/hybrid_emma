@@ -11,6 +11,8 @@ from typing import Any
 
 DEFAULT_EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 DEFAULT_COLLECTION_NAME = "emma_rag_chunks"
+DEFAULT_VECTOR_TOP_K = 8
+DEFAULT_VECTOR_MAX_DISTANCE = 0.8
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -25,6 +27,22 @@ def vector_db_path() -> Path:
 def embedding_model_name() -> str:
     """Return the configured Sentence Transformers embedding model."""
     return os.getenv("EMMA_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
+
+
+def retrieval_top_k() -> int:
+    """Return the maximum number of semantic results."""
+    try:
+        return max(1, int(os.getenv("EMMA_VECTOR_TOP_K", str(DEFAULT_VECTOR_TOP_K))))
+    except ValueError:
+        return DEFAULT_VECTOR_TOP_K
+
+
+def retrieval_max_distance() -> float:
+    """Return the maximum accepted Chroma distance."""
+    try:
+        return max(0.0, float(os.getenv("EMMA_VECTOR_MAX_DISTANCE", str(DEFAULT_VECTOR_MAX_DISTANCE))))
+    except ValueError:
+        return DEFAULT_VECTOR_MAX_DISTANCE
 
 
 @lru_cache(maxsize=1)
@@ -121,9 +139,12 @@ def delete_rag_chunks(scope: str, owner_id: int | None, stem: str) -> None:
     collection.delete(where={"$and": [{"scope": scope}, {"owner_id": owner}, {"stem": stem}]})
 
 
-def search_rag_chunks(user_id: int, question: str, *, top_k: int = 8) -> list[dict[str, Any]]:
+def search_rag_chunks(user_id: int, question: str, *, top_k: int | None = None) -> list[dict[str, Any]]:
     """Search safe global and user-owned chunks for a question."""
     collection = get_collection()
+    top_k = max(1, top_k or retrieval_top_k())
+    if collection.count() == 0:
+        return []
     results: list[dict[str, Any]] = []
     for where in (
         {"$and": [{"scope": "global"}, {"security_risk": {"$ne": "high"}}]},
@@ -135,6 +156,9 @@ def search_rag_chunks(user_id: int, question: str, *, top_k: int = 8) -> list[di
         metadatas = (found.get("metadatas") or [[]])[0]
         distances = (found.get("distances") or [[]])[0]
         for index, document in enumerate(documents):
+            distance = distances[index] if index < len(distances) else None
+            if distance is not None and distance > retrieval_max_distance():
+                continue
             metadata = metadatas[index] if index < len(metadatas) else {}
             results.append(
                 {
@@ -145,7 +169,7 @@ def search_rag_chunks(user_id: int, question: str, *, top_k: int = 8) -> list[di
                     "owner_id": metadata.get("owner_id"),
                     "stem": metadata.get("stem", ""),
                     "index": metadata.get("chunk_index", index),
-                    "distance": distances[index] if index < len(distances) else None,
+                    "distance": distance,
                 }
             )
     results.sort(key=lambda item: item["distance"] if item["distance"] is not None else float("inf"))
