@@ -53,7 +53,7 @@ The rebuild goal is to keep endpoint behavior explicit while moving model calls 
 
 - `prompts.py`
   - Canonical location for active system prompts.
-  - Contains exactly five active builders: user-message safety, RAG prompt-injection security, RAG inconsistency comparison, grounded RAG answers, and untagged general-model answers.
+  - Contains the active builders for user-message safety, RAG prompt-injection security, RAG inconsistency comparison, grounded RAG answers, and general-model answers.
   - `build_general_prompt(...)` is used only when no visible safe RAG has usable chunks, including when every chunked RAG is excluded as high risk.
   - Do not reintroduce routing prompts for "most relevant" files unless the RAG strategy changes again.
 
@@ -190,7 +190,7 @@ Practical rule:
 - Users created by an administrator and users receiving a password reset must have `must_change_password` set. While it is set, backend access is limited to `/auth/me`, `/auth/logout`, and `/auth/change-password`.
 - Password changes require the current password, a different new password of at least eight characters, and invalidation of every other session belonging to that user. Preserve the current bearer session so the UI can continue without another login.
 - `EMMA_MAX_CONTEXT_CHARS` is parsed through `positive_int_setting(...)`. Context admission preserves order, keeps chunks whole, and stops at the first chunk that would exceed the budget. Do not silently truncate chunk text.
-- RAG ingestion writes chunks as JSON only. Embeddings and `.npy` files are not part of the current rebuilt flow.
+- RAG ingestion writes diagnostic JSON chunks and persistent ChromaDB vectors. `.npy` files are not part of the current flow.
 - Inconsistency detection is asynchronous and persisted in `conflicts_index.json`.
 - RAG prompt-injection detection is model-based, multilingual, lives in `rag_security.py`, runs during ingestion, and persists results in `security_index.json` next to the RAG files.
 - Missing RAG security records may be created lazily by chat using the currently selected chat model before chunks are allowed into context.

@@ -2090,7 +2090,7 @@ async def delete_file(
 
     deleted = []
     delete_rag_chunks(scope, target_user_id if scope == "user" else None, stem)
-    for path in [files_dir / f"{stem}.txt", chunks_dir / f"{stem}.json", chunks_dir / f"{stem}.npy"]:
+    for path in [files_dir / f"{stem}.txt", chunks_dir / f"{stem}.json"]:
         if path.exists():
             path.unlink()
             deleted.append(path.name)
@@ -2133,7 +2133,7 @@ async def delete_all_files(
     deleted_count = 0
     for txt_path in list(files_dir.glob("*.txt")):
         stem = txt_path.stem
-        for path in [txt_path, chunks_dir / f"{stem}.json", chunks_dir / f"{stem}.npy"]:
+        for path in [txt_path, chunks_dir / f"{stem}.json"]:
             if path.exists():
                 path.unlink()
                 deleted_count += 1

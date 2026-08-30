@@ -34,7 +34,7 @@ Current backend capabilities:
 - Suspicious RAG audit logs in `logs/rag_audit/`.
 - Suspicious chat manipulation audit logs in `logs/chat_audit/`.
 - Detailed exception logs in `logs/exception_log/`.
-- Chat context built from ordered visible safe chunks within a configurable character budget, not a relevance-based top-k limit.
+- Chat context built from semantically relevant visible safe chunks within a configurable character budget.
 - Untagged general-knowledge chat through the selected model when no visible safe chunked RAG is active.
 
 Current role model:
@@ -248,7 +248,7 @@ The budget preserves source and chunk order and never splits a chunk. Set `EMMA_
 
 1. Open `http://localhost:8650/ui/upload.html`.
 2. Drag and drop a `.txt` file.
-3. The server chunks the document and stores local JSON chunk files.
+3. The server chunks the document, creates embeddings, and stores the vectors in persistent ChromaDB.
 4. The server checks the new document for likely prompt injection.
 5. The server checks for likely inconsistencies against visible RAGs.
 6. The document becomes available to chat if it is not marked `high` risk.
