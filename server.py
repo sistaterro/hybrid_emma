@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from chat_policy import DEFAULT_MAX_CONTEXT_CHARS, bounded_context_chunks, no_info_reply, positive_int_setting
 from prompts import build_general_prompt, build_inconsistency_prompt, build_rag_prompt, build_safety_prompt
-from vector_store import add_rag_chunks
+from vector_store import add_rag_chunks, search_rag_chunks
 
 
 @asynccontextmanager
@@ -912,22 +912,27 @@ async def visible_chat_chunk_sources(user: dict, model: dict | None = None) -> l
     return sources
 
 
-async def load_visible_context_chunks(user: dict, model: dict | None = None) -> list[dict]:
-    """Load ordered visible safe chunks within the configured chat budget."""
+async def load_visible_context_chunks(
+    user: dict,
+    model: dict | None = None,
+    question: str = "",
+) -> list[dict]:
+    """Load semantically relevant visible safe chunks within the chat budget."""
+    sources = await visible_chat_chunk_sources(user, model)
+    if not question:
+        return []
+    allowed = {f"{source['scope']}/{source['stem']}" for source in sources}
     context_chunks = []
-    for source in await visible_chat_chunk_sources(user, model):
-        for chunk in load_chunk_file(source["chunks_dir"], source["stem"]):
-            text = str(chunk.get("text", "")).strip()
-            if not text:
-                continue
-            index = chunk.get("index", len(context_chunks))
-            context_chunks.append(
-                {
-                    "source": f"{source['key']}#{int(index):04d}",
-                    "scope": source["scope"],
-                    "text": text,
-                }
-            )
+    for chunk in search_rag_chunks(user["id"], question):
+        if f"{chunk['scope']}/{chunk['stem']}" not in allowed:
+            continue
+        context_chunks.append(
+            {
+                "source": f"{chunk['scope']}/{chunk['stem']}#{int(chunk['index']):04d}",
+                "scope": chunk["scope"],
+                "text": chunk["text"],
+            }
+        )
     return bounded_context_chunks(context_chunks, MAX_RAG_CONTEXT_CHARS)
 
 
@@ -2349,7 +2354,7 @@ async def chat(
     if not question:
         raise HTTPException(status_code=400, detail="The last message is empty")
 
-    context_chunks = await load_visible_context_chunks(user, model)
+    context_chunks = await load_visible_context_chunks(user, model, question)
     safety = await analyze_user_message_safety(question, model)
     ai_messages = build_chat_messages_with_visible_context(req, context_chunks)
     audit_record = build_chat_audit_record(req, user, model, question, safety, context_chunks)

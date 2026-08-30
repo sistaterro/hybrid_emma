@@ -90,3 +90,33 @@ def delete_rag_chunks(scope: str, owner_id: int | None, stem: str) -> None:
     owner = "global" if owner_id is None else str(owner_id)
     collection.delete(where={"$and": [{"scope": scope}, {"owner_id": owner}, {"stem": stem}]})
 
+
+def search_rag_chunks(user_id: int, question: str, *, top_k: int = 8) -> list[dict[str, Any]]:
+    """Search safe global and user-owned chunks for a question."""
+    collection = get_collection()
+    results: list[dict[str, Any]] = []
+    for where in (
+        {"$and": [{"scope": "global"}, {"security_risk": {"$ne": "high"}}]},
+        {"$and": [{"scope": "user"}, {"owner_id": str(user_id)}, {"security_risk": {"$ne": "high"}}]},
+    ):
+        found = collection.query(query_texts=[question], n_results=top_k, where=where)
+        ids = (found.get("ids") or [[]])[0]
+        documents = (found.get("documents") or [[]])[0]
+        metadatas = (found.get("metadatas") or [[]])[0]
+        distances = (found.get("distances") or [[]])[0]
+        for index, document in enumerate(documents):
+            metadata = metadatas[index] if index < len(metadatas) else {}
+            results.append(
+                {
+                    "id": ids[index] if index < len(ids) else "",
+                    "text": document,
+                    "source": metadata.get("source", "unknown"),
+                    "scope": metadata.get("scope", "user"),
+                    "owner_id": metadata.get("owner_id"),
+                    "stem": metadata.get("stem", ""),
+                    "index": metadata.get("chunk_index", index),
+                    "distance": distances[index] if index < len(distances) else None,
+                }
+            )
+    results.sort(key=lambda item: item["distance"] if item["distance"] is not None else float("inf"))
+    return results[:top_k]
