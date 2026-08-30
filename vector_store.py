@@ -27,7 +27,9 @@ def get_collection():
     import chromadb
     from chromadb.utils import embedding_functions
 
-    client = chromadb.PersistentClient(path=str(vector_db_path()))
+    database_path = vector_db_path()
+    database_path.mkdir(parents=True, exist_ok=True)
+    client = chromadb.PersistentClient(path=str(database_path))
     embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
         model_name=embedding_model_name()
     )
