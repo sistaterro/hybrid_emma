@@ -58,7 +58,7 @@ The rebuild goal is to keep endpoint behavior explicit while moving model calls 
   - Do not reintroduce routing prompts for "most relevant" files unless the RAG strategy changes again.
 
 - `chat_policy.py`
-  - Pure policies for ordered RAG context budgeting and common-language detection.
+  - Pure policies for RAG context budgeting and common-language detection.
   - Keep these policies independent from FastAPI and runtime persistence so they remain cheap to unit test.
 
 - `rag_security.py`
@@ -154,7 +154,7 @@ Recommended convention:
 
 Avoid prompt classes without real state.
 
-Current RAG strategy deliberately does not route to "probable" files or use relevance-based top-k retrieval. Chat loads ordered visible safe chunks until the `EMMA_MAX_CONTEXT_CHARS` budget is reached and lets the selected model reason over that bounded context. RAGs marked with `security.risk == "high"` are excluded from chat context. If no visible safe chunks are available, chat uses `build_general_prompt(...)` and the selected model as a general-purpose LLM without grounding tags.
+Current RAG strategy uses persistent ChromaDB semantic retrieval with configurable top-k and maximum distance. Retrieved safe chunks are admitted whole until the `EMMA_MAX_CONTEXT_CHARS` budget is reached. RAGs marked with `security.risk == "high"` are excluded from chat context. If no visible safe chunks are available, chat uses `build_general_prompt(...)` and the selected model as a general-purpose LLM.
 
 ### 4. Protect Visual State
 
@@ -186,7 +186,7 @@ Practical rule:
 - If adding LangChain or LangGraph, keep framework integration behind a thin internal boundary so endpoint code remains easy to read and test.
 - Model generation should go through `generate_ai_reply(...)` and the LangChain model factory. Do not call external provider REST APIs directly from endpoint code.
 - Emma's chat persona belongs in `build_rag_prompt(...)`: she presents herself as an adult woman, uses feminine forms for self-reference when the language requires them, and remains warm, courteous, professional, and free of gender stereotypes. Do not apply this conversational persona to structured safety, RAG-security, or inconsistency-analysis prompts.
-- Keep API keys server-side only. `/health` may report available local models, external API models, providers, and sources, but must never return secret values.
+  - Keep API keys server-side only. `/health` may report available local models, external API models, providers, and sources, but must never return secret values.
 - Users created by an administrator and users receiving a password reset must have `must_change_password` set. While it is set, backend access is limited to `/auth/me`, `/auth/logout`, and `/auth/change-password`.
 - Password changes require the current password, a different new password of at least eight characters, and invalidation of every other session belonging to that user. Preserve the current bearer session so the UI can continue without another login.
 - `EMMA_MAX_CONTEXT_CHARS` is parsed through `positive_int_setting(...)`. Context admission preserves order, keeps chunks whole, and stops at the first chunk that would exceed the budget. Do not silently truncate chunk text.

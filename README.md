@@ -240,6 +240,8 @@ Response streams naturally in both general and RAG modes
 
 The vector-backed flow retrieves relevant visible safe chunks and passes them to the selected model. When no visible safe chunks fit or exist—including when every chunked RAG is blocked as high risk—Emma uses the selected model as a general-purpose LLM. Responses are not required to contain grounding tags.
 
+ChromaDB persists its local index in `chroma_db/` by default. The embedding model is `paraphrase-multilingual-MiniLM-L12-v2`; configure `EMMA_VECTOR_DB_PATH`, `EMMA_EMBEDDING_MODEL`, `EMMA_VECTOR_TOP_K`, and `EMMA_VECTOR_MAX_DISTANCE` when needed. The first run must have the model available locally; `run.bat` starts subsequent runs in Hugging Face offline mode.
+
 The budget preserves source and chunk order and never splits a chunk. Set `EMMA_MAX_CONTEXT_CHARS` before startup to tune the limit for the context window of the local or external models in use. Invalid and non-positive values fall back to the default.
 
 ---
@@ -249,6 +251,7 @@ The budget preserves source and chunk order and never splits a chunk. Set `EMMA_
 1. Open `http://localhost:8650/ui/upload.html`.
 2. Drag and drop a `.txt` file.
 3. The server chunks the document, creates embeddings, and stores the vectors in persistent ChromaDB.
+4. Administrators can rebuild the vector index with `POST /admin/rags/reindex`.
 4. The server checks the new document for likely prompt injection.
 5. The server checks for likely inconsistencies against visible RAGs.
 6. The document becomes available to chat if it is not marked `high` risk.
