@@ -2039,6 +2039,30 @@ async def upload_file(
     }
 
 
+@app.post("/admin/rags/reindex")
+async def reindex_rags(user: dict = Depends(get_current_user)):
+    """Rebuild vector records for all RAG source files from canonical text."""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can reindex RAGs")
+    processed = []
+    failures = []
+    sources = [(path, GLOBAL_CHUNKS_DIR, "global", None, user) for path in GLOBAL_FILES_DIR.glob("*.txt")]
+    conn = get_db()
+    rows = conn.execute("SELECT id FROM users WHERE is_active = 1").fetchall()
+    conn.close()
+    for row in rows:
+        owner = {"id": row["id"], "role": "user"}
+        files_dir = user_files_dir(row["id"])
+        sources.extend((path, user_chunks_dir(row["id"]), "user", row["id"], owner) for path in files_dir.glob("*.txt"))
+    for txt_path, chunks_dir, scope, owner_id, owner in sources:
+        try:
+            await process_rag_file(txt_path, chunks_dir, scope, owner_id, owner)
+            processed.append(f"{scope}/{txt_path.stem}")
+        except Exception as exc:
+            failures.append({"rag": f"{scope}/{txt_path.stem}", "error": str(exc)})
+    return {"status": "ok" if not failures else "partial", "processed": processed, "failures": failures}
+
+
 @app.delete("/files/{scope}/{stem}")
 async def delete_file(
     scope: str,
