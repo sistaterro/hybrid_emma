@@ -127,9 +127,16 @@ def replace_rag_chunks(
     stem: str,
     security_risk: str = "none",
 ) -> list[str]:
-    """Replace one RAG's vector records without retaining stale chunks."""
-    delete_rag_chunks(scope, owner_id, stem)
-    return add_rag_chunks(chunks, security_risk=security_risk)
+    """Replace one RAG's vectors while retaining the old set until success."""
+    collection = get_collection()
+    owner = "global" if owner_id is None else str(owner_id)
+    previous = collection.get(where={"$and": [{"scope": scope}, {"owner_id": owner}, {"stem": stem}]})
+    previous_ids = set(previous.get("ids") or [])
+    new_ids = set(add_rag_chunks(chunks, security_risk=security_risk))
+    stale_ids = previous_ids - new_ids
+    if stale_ids:
+        collection.delete(ids=list(stale_ids))
+    return list(new_ids)
 
 
 def delete_rag_chunks(scope: str, owner_id: int | None, stem: str) -> None:
