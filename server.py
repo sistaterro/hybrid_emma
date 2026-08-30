@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from chat_policy import DEFAULT_MAX_CONTEXT_CHARS, bounded_context_chunks, no_info_reply, positive_int_setting
 from prompts import build_general_prompt, build_inconsistency_prompt, build_rag_prompt, build_safety_prompt
-from vector_store import delete_rag_chunks, replace_rag_chunks, search_rag_chunks
+from vector_store import delete_rag_chunks, replace_rag_chunks, search_rag_chunks, update_rag_security_risk
 
 
 @asynccontextmanager
@@ -886,6 +886,8 @@ async def visible_chat_chunk_sources(user: dict, model: dict | None = None) -> l
     """List visible safe RAG chunk sources for a chat user."""
     sources = []
     for txt_path in sorted(GLOBAL_FILES_DIR.glob("*.txt")):
+        security = prune_index_entries(GLOBAL_FILES_DIR, "security_index.json").get(txt_path.stem, {})
+        update_rag_security_risk("global", None, txt_path.stem, security.get("risk", "none"))
         if await should_exclude_rag_from_chat(txt_path, "global", None, model):
             continue
         sources.append(
@@ -899,6 +901,8 @@ async def visible_chat_chunk_sources(user: dict, model: dict | None = None) -> l
 
     own_chunks_dir = user_chunks_dir(user["id"])
     for txt_path in sorted(user_files_dir(user["id"]).glob("*.txt")):
+        security = prune_index_entries(user_files_dir(user["id"]), "security_index.json").get(txt_path.stem, {})
+        update_rag_security_risk("user", user["id"], txt_path.stem, security.get("risk", "none"))
         if await should_exclude_rag_from_chat(txt_path, "user", user["id"], model):
             continue
         sources.append(

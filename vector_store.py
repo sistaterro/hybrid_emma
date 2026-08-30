@@ -146,6 +146,16 @@ def delete_rag_chunks(scope: str, owner_id: int | None, stem: str) -> None:
     collection.delete(where={"$and": [{"scope": scope}, {"owner_id": owner}, {"stem": stem}]})
 
 
+def update_rag_security_risk(scope: str, owner_id: int | None, stem: str, risk: str) -> None:
+    """Synchronize a RAG security risk value across its vector metadata."""
+    collection = get_collection()
+    owner = "global" if owner_id is None else str(owner_id)
+    found = collection.get(where={"$and": [{"scope": scope}, {"owner_id": owner}, {"stem": stem}]})
+    ids = found.get("ids") or []
+    if ids:
+        collection.update(ids=ids, metadatas=[{**metadata, "security_risk": risk} for metadata in (found.get("metadatas") or [])])
+
+
 def search_rag_chunks(user_id: int, question: str, *, top_k: int | None = None) -> list[dict[str, Any]]:
     """Search safe global and user-owned chunks for a question."""
     collection = get_collection()
