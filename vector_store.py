@@ -84,6 +84,19 @@ def add_rag_chunks(
     return ids
 
 
+def replace_rag_chunks(
+    chunks: list[dict[str, Any]],
+    *,
+    scope: str,
+    owner_id: int | None,
+    stem: str,
+    security_risk: str = "none",
+) -> list[str]:
+    """Replace one RAG's vector records without retaining stale chunks."""
+    delete_rag_chunks(scope, owner_id, stem)
+    return add_rag_chunks(chunks, security_risk=security_risk)
+
+
 def delete_rag_chunks(scope: str, owner_id: int | None, stem: str) -> None:
     """Delete all persisted vectors belonging to one RAG."""
     collection = get_collection()

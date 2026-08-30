@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from chat_policy import DEFAULT_MAX_CONTEXT_CHARS, bounded_context_chunks, no_info_reply, positive_int_setting
 from prompts import build_general_prompt, build_inconsistency_prompt, build_rag_prompt, build_safety_prompt
-from vector_store import add_rag_chunks, search_rag_chunks
+from vector_store import replace_rag_chunks, search_rag_chunks
 
 
 @asynccontextmanager
@@ -1116,8 +1116,13 @@ async def process_rag_file(
         persist_suspicious_rag_audit_log(txt_path, scope, owner_id, security_assessment)
     else:
         security_assessment = security_index.get(txt_path.stem, {})
-    if security_assessment.get("risk") != "high":
-        add_rag_chunks(output["chunks"], security_risk=security_assessment.get("risk", "none"))
+    replace_rag_chunks(
+        output["chunks"],
+        scope=scope,
+        owner_id=owner_id,
+        stem=txt_path.stem,
+        security_risk=security_assessment.get("risk", "none"),
+    )
     if user is not None:
         conflicts = await detect_rag_inconsistencies(
             new_name=txt_path.name,
