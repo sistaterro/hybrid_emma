@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from chat_policy import DEFAULT_MAX_CONTEXT_CHARS, bounded_context_chunks, no_info_reply, positive_int_setting
 from prompts import build_general_prompt, build_inconsistency_prompt, build_rag_prompt, build_safety_prompt
-from vector_store import replace_rag_chunks, search_rag_chunks
+from vector_store import delete_rag_chunks, replace_rag_chunks, search_rag_chunks
 
 
 @asynccontextmanager
@@ -2162,6 +2162,7 @@ async def delete_file(
         raise HTTPException(status_code=400, detail="Invalid scope")
 
     deleted = []
+    delete_rag_chunks(scope, target_user_id if scope == "user" else None, stem)
     for path in [files_dir / f"{stem}.txt", chunks_dir / f"{stem}.json", chunks_dir / f"{stem}.npy"]:
         if path.exists():
             path.unlink()
