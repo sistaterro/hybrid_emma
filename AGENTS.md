@@ -267,6 +267,73 @@ These debt items may exist consciously and should not be "fixed" without alignin
 - `server.py` remains monolithic;
 - Startup initialization uses FastAPI lifespan handlers.
 
+## Vector Database Restructure Strategy
+
+The `vectordb` branch is a deliberate change to the RAG retrieval core. The existing paragraph-based chunking strategy remains valid and should be reused unless a concrete retrieval test proves otherwise. The new core will use persistent ChromaDB storage and the multilingual Sentence Transformers model `paraphrase-multilingual-MiniLM-L12-v2` to generate embeddings. ChromaDB stores the chunk embeddings, documents, and metadata; it does not replace the embedding model.
+
+The migration is intentionally divided into four phases, one phase per commit. Intermediate commits do not need to leave the complete application functional. Each phase should keep the source `.txt` files as the durable source of truth, make vector data rebuildable, and preserve the existing security and permission boundaries wherever that phase touches them.
+
+### C — Create
+
+Commit the foundational vector-database ingestion path.
+
+- Add a focused vector-store module that owns ChromaDB initialization, collection access, embedding-function configuration, and document insertion.
+- Use a persistent, configurable path such as `EMMA_VECTOR_DB_PATH`; never use an in-memory ChromaDB client for the application runtime.
+- Use the same explicitly configured multilingual embedding model for ingestion and query-time retrieval.
+- Insert one ChromaDB record per existing quality chunk, with deterministic IDs and metadata sufficient for tenant filtering and later deletion: scope, owner ID, source name, stem, chunk index, and security state.
+- Integrate vector creation into RAG ingestion after chunking and security assessment. High-risk RAGs must not become usable chat context.
+- Keep JSON chunk output temporarily when it helps migration, diagnostics, or recovery. It must not become a second source of truth for retrieval.
+- Add tests for persistence across client recreation, deterministic IDs, metadata, collection isolation, and mocked embedding behavior.
+- Commit this phase independently with a message such as `feat: create persistent rag vectors`.
+
+### R — Read
+
+Commit vector-backed listing and semantic retrieval.
+
+- Add a read API in the vector-store module for RAG metadata and semantic chunk search.
+- Replace ordered all-chunk chat loading with query-based retrieval, while preserving the existing general prompt when no safe relevant context is available.
+- Apply permission, scope, owner, and high-risk security filtering before or during the ChromaDB query; never retrieve broadly and rely only on frontend filtering.
+- Preserve the untrusted-context delimiters and all response-tag behavior in RAG mode.
+- Keep `/files` as the backend source for UI state. It should report indexing status, chunk counts, security status, and conflict status without exposing vector-store internals.
+- Add tests for top-k retrieval, tenant isolation, high-risk exclusion, no-result general mode, context budgeting, and persistence after restart.
+- Remove the old ordered-context retrieval path when the new path has equivalent coverage and the migration is complete enough for the branch.
+- Commit this phase independently with a message such as `feat: read rag context from chromadb`.
+
+### U — Update
+
+Commit replacement, re-embedding, and reindexing behavior.
+
+- Treat an uploaded file with an existing stem as a replacement, not an append operation.
+- Delete the previous vector records for that RAG before inserting the new chunk set, or use a safe staged replacement that cannot leave old and new chunks mixed.
+- Re-run chunking, embedding, security assessment, descriptions, and inconsistency checks for the new source.
+- Add an explicit reindex operation for rebuilding ChromaDB from the canonical `.txt` files. Reindexing must be repeatable and safe to run more than once.
+- Version or record the embedding model and relevant chunking configuration in metadata so incompatible vector data can be detected and rebuilt.
+- Handle partial failures and async races: do not publish derived state for a deleted source, and do not report a completed index until all vector records are present.
+- Add tests for replacement, idempotent reindexing, model/configuration changes, partial failure cleanup, and deletion during background processing.
+- Remove obsolete embedding, index, or processing code only after its replacement is covered and no endpoint depends on it.
+- Commit this phase independently with a message such as `feat: update rag vectors and reindexing`.
+
+### D — Delete
+
+Commit complete lifecycle cleanup and removal of superseded retrieval code.
+
+- Make RAG deletion remove the source file, its vector records, derived metadata, conflict records, security records, and any remaining legacy artifacts that belong exclusively to that RAG.
+- Delete vectors by deterministic IDs or validated metadata filters; never clear an entire shared collection for one RAG deletion.
+- Ensure global and per-user data cannot be deleted across ownership boundaries.
+- Add cleanup for orphaned vector records and a safe administrative integrity/rebuild path.
+- Update startup behavior, tests, documentation, and UI status so ChromaDB is treated as a persistent rebuildable index.
+- Remove the old retrieval implementation, obsolete `.npy` handling, and any dead code that represented the pre-vector retrieval strategy, provided the full CRUD test coverage no longer requires it.
+- Verify that general untagged chat, prompt-injection screening, high-risk exclusion, conflict detection, audit logs, streaming, and permissions remain intact.
+- Commit this phase independently with a message such as `feat: delete rag vectors and retire legacy retrieval`.
+
+### Rules for the four commits
+
+- Do not squash the four CRUD commits; each commit must represent one coherent migration phase.
+- Do not mix unrelated UI redesigns, provider changes, or prompt changes into these commits.
+- Prefer deterministic IDs, explicit metadata filters, persistent local storage, reproducible reindexing, and mocked model calls in tests.
+- ChromaDB is a rebuildable retrieval index. The original `.txt` files remain the canonical source, while JSON chunks may be retained only as a transitional or diagnostic representation.
+- The absence of a fully functional system between commits is acceptable for this branch. Before final handoff, run the complete test suite and document any intentional contract changes.
+
 ## What To Do When Inheriting This Repo
 
 Recommended order to understand it:
