@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from chat_policy import DEFAULT_MAX_CONTEXT_CHARS, bounded_context_chunks, no_info_reply, positive_int_setting
 from prompts import build_general_prompt, build_inconsistency_prompt, build_rag_prompt, build_safety_prompt
+from vector_store import delete_rag_chunks, replace_rag_chunks, search_rag_chunks, update_rag_security_risk
 
 
 @asynccontextmanager
@@ -885,6 +886,8 @@ async def visible_chat_chunk_sources(user: dict, model: dict | None = None) -> l
     """List visible safe RAG chunk sources for a chat user."""
     sources = []
     for txt_path in sorted(GLOBAL_FILES_DIR.glob("*.txt")):
+        security = prune_index_entries(GLOBAL_FILES_DIR, "security_index.json").get(txt_path.stem, {})
+        update_rag_security_risk("global", None, txt_path.stem, security.get("risk", "none"))
         if await should_exclude_rag_from_chat(txt_path, "global", None, model):
             continue
         sources.append(
@@ -898,6 +901,8 @@ async def visible_chat_chunk_sources(user: dict, model: dict | None = None) -> l
 
     own_chunks_dir = user_chunks_dir(user["id"])
     for txt_path in sorted(user_files_dir(user["id"]).glob("*.txt")):
+        security = prune_index_entries(user_files_dir(user["id"]), "security_index.json").get(txt_path.stem, {})
+        update_rag_security_risk("user", user["id"], txt_path.stem, security.get("risk", "none"))
         if await should_exclude_rag_from_chat(txt_path, "user", user["id"], model):
             continue
         sources.append(
@@ -911,22 +916,27 @@ async def visible_chat_chunk_sources(user: dict, model: dict | None = None) -> l
     return sources
 
 
-async def load_visible_context_chunks(user: dict, model: dict | None = None) -> list[dict]:
-    """Load ordered visible safe chunks within the configured chat budget."""
+async def load_visible_context_chunks(
+    user: dict,
+    model: dict | None = None,
+    question: str = "",
+) -> list[dict]:
+    """Load semantically relevant visible safe chunks within the chat budget."""
+    sources = await visible_chat_chunk_sources(user, model)
+    if not question:
+        return []
+    allowed = {f"{source['scope']}/{source['stem']}" for source in sources}
     context_chunks = []
-    for source in await visible_chat_chunk_sources(user, model):
-        for chunk in load_chunk_file(source["chunks_dir"], source["stem"]):
-            text = str(chunk.get("text", "")).strip()
-            if not text:
-                continue
-            index = chunk.get("index", len(context_chunks))
-            context_chunks.append(
-                {
-                    "source": f"{source['key']}#{int(index):04d}",
-                    "scope": source["scope"],
-                    "text": text,
-                }
-            )
+    for chunk in search_rag_chunks(user["id"], question):
+        if f"{chunk['scope']}/{chunk['stem']}" not in allowed:
+            continue
+        context_chunks.append(
+            {
+                "source": f"{chunk['scope']}/{chunk['stem']}#{int(chunk['index']):04d}",
+                "scope": chunk["scope"],
+                "text": chunk["text"],
+            }
+        )
     return bounded_context_chunks(context_chunks, MAX_RAG_CONTEXT_CHARS)
 
 
@@ -1108,6 +1118,15 @@ async def process_rag_file(
         security_assessment = await assess_rag_prompt_injection(text, txt_path.name)
         save_security_to_index(txt_path.parent, txt_path.stem, security_assessment)
         persist_suspicious_rag_audit_log(txt_path, scope, owner_id, security_assessment)
+    else:
+        security_assessment = security_index.get(txt_path.stem, {})
+    replace_rag_chunks(
+        output["chunks"],
+        scope=scope,
+        owner_id=owner_id,
+        stem=txt_path.stem,
+        security_risk=security_assessment.get("risk", "none"),
+    )
     if user is not None:
         conflicts = await detect_rag_inconsistencies(
             new_name=txt_path.name,
@@ -1521,37 +1540,6 @@ def store_chat_messages(conversation_id: str | None, user_id: int, messages: lis
     conn.close()
 
 
-def response_tag(text: str) -> str | None:
-    """Extract Emma's leading grounding tag from a response."""
-    stripped = text.strip()
-    for tag in ("[RAG]", "[DRIFT]", "[NO INFO]"):
-        if stripped.startswith(tag):
-            return tag
-    return None
-
-
-def fallback_response_tag(context_chunks: list[dict]) -> str:
-    """Return the conservative grounding tag when a model omits one."""
-    return "[DRIFT]" if context_chunks else "[NO INFO]"
-
-
-def ensure_response_tag(text: str, context_chunks: list[dict]) -> str:
-    """Prefix a response with a conservative grounding tag if the model omitted it."""
-    if response_tag(text):
-        return text
-    prefix = fallback_response_tag(context_chunks)
-    return f"{prefix}\n{text.lstrip()}" if text.strip() else f"{prefix}\n"
-
-
-def remove_response_tag(text: str) -> str:
-    """Remove an accidental grounding tag from a general-mode response."""
-    tag = response_tag(text)
-    if not tag:
-        return text
-    leading_length = len(text) - len(text.lstrip())
-    return text[leading_length + len(tag) :].lstrip("\r\n ")
-
-
 def build_no_info_reply(question: str) -> str:
     """Build a deterministic no-context reply in the user's likely language."""
     return no_info_reply(question)
@@ -1566,7 +1554,6 @@ async def stream_static_chat_reply_as_json_lines(
     """Stream a backend-generated reply and persist it like a model response."""
     store_chat_messages(req.conversation_id, user["id"], req.messages, reply)
     audit_record["response"] = {
-        "tag": response_tag(reply),
         "length": len(reply),
     }
     persist_suspicious_chat_audit_log(audit_record)
@@ -1582,84 +1569,15 @@ async def stream_chat_as_json_lines(
     audit_record: dict,
     context_chunks: list[dict],
 ):
-    """Stream chat chunks as newline-delimited JSON and persist the final reply."""
+    """Stream model output unchanged and persist the final reply."""
     reply_parts = []
-    if not context_chunks:
-        prefix_checked = False
-        buffered_start = ""
-        possible_tags = ("[RAG]", "[DRIFT]", "[NO INFO]")
-        async for piece in generate_ai_reply_stream(model, messages):
-            if not prefix_checked:
-                buffered_start += piece
-                stripped_start = buffered_start.lstrip()
-                if response_tag(buffered_start):
-                    prefix_checked = True
-                    clean_start = remove_response_tag(buffered_start)
-                    if clean_start:
-                        reply_parts.append(clean_start)
-                        yield json.dumps({"text": clean_start, "done": False}) + "\n"
-                    buffered_start = ""
-                elif any(tag.startswith(stripped_start) for tag in possible_tags):
-                    continue
-                else:
-                    prefix_checked = True
-                    reply_parts.append(buffered_start)
-                    yield json.dumps({"text": buffered_start, "done": False}) + "\n"
-                    buffered_start = ""
-                continue
-            reply_parts.append(piece)
-            yield json.dumps({"text": piece, "done": False}) + "\n"
-
-        if not prefix_checked and buffered_start:
-            clean_start = remove_response_tag(buffered_start)
-            if clean_start:
-                reply_parts.append(clean_start)
-                yield json.dumps({"text": clean_start, "done": False}) + "\n"
-
-        reply = "".join(reply_parts)
-        store_chat_messages(req.conversation_id, user["id"], req.messages, reply)
-        audit_record["response"] = {"tag": None, "length": len(reply)}
-        persist_suspicious_chat_audit_log(audit_record)
-        yield json.dumps({"text": "", "done": True}) + "\n"
-        return
-
-    prefix_checked = False
-    buffered_start = ""
-    possible_tags = ("[RAG]", "[DRIFT]", "[NO INFO]")
-
     async for piece in generate_ai_reply_stream(model, messages):
-        if not prefix_checked:
-            buffered_start += piece
-            stripped_start = buffered_start.lstrip()
-            if response_tag(buffered_start):
-                prefix_checked = True
-                reply_parts.append(buffered_start)
-                yield json.dumps({"text": buffered_start, "done": False}) + "\n"
-                buffered_start = ""
-            elif any(tag.startswith(stripped_start) for tag in possible_tags):
-                continue
-            else:
-                prefix_checked = True
-                tagged_start = ensure_response_tag(buffered_start, context_chunks)
-                reply_parts.append(tagged_start)
-                yield json.dumps({"text": tagged_start, "done": False}) + "\n"
-                buffered_start = ""
-            continue
-
         reply_parts.append(piece)
         yield json.dumps({"text": piece, "done": False}) + "\n"
 
-    if not prefix_checked and buffered_start:
-        tagged_start = ensure_response_tag(buffered_start, context_chunks)
-        reply_parts.append(tagged_start)
-        yield json.dumps({"text": tagged_start, "done": False}) + "\n"
-
     reply = "".join(reply_parts)
     store_chat_messages(req.conversation_id, user["id"], req.messages, reply)
-    audit_record["response"] = {
-        "tag": response_tag(reply),
-        "length": len(reply),
-    }
+    audit_record["response"] = {"length": len(reply)}
     persist_suspicious_chat_audit_log(audit_record)
     yield json.dumps({"text": "", "done": True}) + "\n"
 
@@ -2125,6 +2043,30 @@ async def upload_file(
     }
 
 
+@app.post("/admin/rags/reindex")
+async def reindex_rags(user: dict = Depends(get_current_user)):
+    """Rebuild vector records for all RAG source files from canonical text."""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can reindex RAGs")
+    processed = []
+    failures = []
+    sources = [(path, GLOBAL_CHUNKS_DIR, "global", None, user) for path in GLOBAL_FILES_DIR.glob("*.txt")]
+    conn = get_db()
+    rows = conn.execute("SELECT id FROM users WHERE is_active = 1").fetchall()
+    conn.close()
+    for row in rows:
+        owner = {"id": row["id"], "role": "user"}
+        files_dir = user_files_dir(row["id"])
+        sources.extend((path, user_chunks_dir(row["id"]), "user", row["id"], owner) for path in files_dir.glob("*.txt"))
+    for txt_path, chunks_dir, scope, owner_id, owner in sources:
+        try:
+            await process_rag_file(txt_path, chunks_dir, scope, owner_id, owner)
+            processed.append(f"{scope}/{txt_path.stem}")
+        except Exception as exc:
+            failures.append({"rag": f"{scope}/{txt_path.stem}", "error": str(exc)})
+    return {"status": "ok" if not failures else "partial", "processed": processed, "failures": failures}
+
+
 @app.delete("/files/{scope}/{stem}")
 async def delete_file(
     scope: str,
@@ -2147,7 +2089,8 @@ async def delete_file(
         raise HTTPException(status_code=400, detail="Invalid scope")
 
     deleted = []
-    for path in [files_dir / f"{stem}.txt", chunks_dir / f"{stem}.json", chunks_dir / f"{stem}.npy"]:
+    delete_rag_chunks(scope, target_user_id if scope == "user" else None, stem)
+    for path in [files_dir / f"{stem}.txt", chunks_dir / f"{stem}.json"]:
         if path.exists():
             path.unlink()
             deleted.append(path.name)
@@ -2190,7 +2133,7 @@ async def delete_all_files(
     deleted_count = 0
     for txt_path in list(files_dir.glob("*.txt")):
         stem = txt_path.stem
-        for path in [txt_path, chunks_dir / f"{stem}.json", chunks_dir / f"{stem}.npy"]:
+        for path in [txt_path, chunks_dir / f"{stem}.json"]:
             if path.exists():
                 path.unlink()
                 deleted_count += 1
@@ -2344,7 +2287,7 @@ async def chat(
     if not question:
         raise HTTPException(status_code=400, detail="The last message is empty")
 
-    context_chunks = await load_visible_context_chunks(user, model)
+    context_chunks = await load_visible_context_chunks(user, model, question)
     safety = await analyze_user_message_safety(question, model)
     ai_messages = build_chat_messages_with_visible_context(req, context_chunks)
     audit_record = build_chat_audit_record(req, user, model, question, safety, context_chunks)
@@ -2356,21 +2299,13 @@ async def chat(
         )
 
     reply = await generate_ai_reply(model, ai_messages)
-    if context_chunks:
-        reply = ensure_response_tag(reply, context_chunks)
-    else:
-        reply = remove_response_tag(reply)
     store_chat_messages(req.conversation_id, user["id"], req.messages, reply)
 
-    audit_record["response"] = {
-        "tag": response_tag(reply),
-        "length": len(reply),
-    }
+    audit_record["response"] = {"length": len(reply)}
     persist_suspicious_chat_audit_log(audit_record)
 
     return {
         "model": model["id"],
-        "tag": response_tag(reply),
         "message": {"role": "assistant", "content": reply},
     }
 

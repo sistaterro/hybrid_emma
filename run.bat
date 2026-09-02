@@ -3,6 +3,10 @@ setlocal
 
 cd /d "%~dp0"
 
+rem The multilingual embedding model is cached locally after the initial download.
+set "HF_HUB_OFFLINE=1"
+set "TRANSFORMERS_OFFLINE=1"
+
 if not exist ".venv\Scripts\activate.bat" (
   echo [error] Virtual environment not found.
   echo [hint] Create it first with: python -m venv .venv

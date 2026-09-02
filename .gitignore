@@ -5,6 +5,7 @@ env/
 
 # Runtime database
 emma.db
+chroma_db/
 
 # Knowledge base - user data, never commit
 files/

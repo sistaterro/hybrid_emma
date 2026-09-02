@@ -34,7 +34,7 @@ Current backend capabilities:
 - Suspicious RAG audit logs in `logs/rag_audit/`.
 - Suspicious chat manipulation audit logs in `logs/chat_audit/`.
 - Detailed exception logs in `logs/exception_log/`.
-- Chat context built from ordered visible safe chunks within a configurable character budget, not a relevance-based top-k limit.
+- Chat context built from semantically relevant visible safe chunks within a configurable character budget.
 - Untagged general-knowledge chat through the selected model when no visible safe chunked RAG is active.
 
 Current role model:
@@ -43,13 +43,9 @@ Current role model:
 - `user`: can use chat and manage their own `mine` RAGs.
 - `read_only`: can use chat only and cannot access upload.
 
-When active safe RAG chunks are used, every response is expected to tag its grounding:
+When active safe RAG chunks are used, the model receives the retrieved context and answers naturally.
 
-- `[RAG]` - answer is based on uploaded documents.
-- `[DRIFT]` - answer includes model knowledge beyond the documents.
-- `[NO INFO]` - active RAG context exists, but the documents do not contain enough relevant information.
-
-When no visible safe RAG has generated usable chunks, Emma switches to general chat. In that mode she answers directly from the selected model without a grounding tag. Her voice remains warm and professional, with natural feminine self-reference where the language requires it; examples such as "surprised", "tired", or "informed" describe grammatical agreement, not a fixed emotional personality.
+When no visible safe RAG has generated usable chunks, Emma switches to general chat. Her voice remains warm and professional, with natural feminine self-reference where the language requires it; examples such as "surprised", "tired", or "informed" describe grammatical agreement, not a fixed emotional personality.
 
 ---
 
@@ -239,10 +235,12 @@ Backend builds the RAG prompt from prompts.py
       v
 Selected LangChain chat model streams or returns the answer
       v
-Response streams without a grounding tag in general mode
+Response streams naturally in both general and RAG modes
 ```
 
-This rebuilt flow intentionally does not use embeddings, `.npy` files, router prompts, or relevance-based top-k retrieval. Ordered visible safe chunks are admitted whole until the `EMMA_MAX_CONTEXT_CHARS` budget is reached; the default is 60,000 characters. When no visible safe chunks fit or exist—including when every chunked RAG is blocked as high risk—Emma uses the selected model as a general-purpose LLM and returns an untagged answer.
+The vector-backed flow retrieves relevant visible safe chunks and passes them to the selected model. When no visible safe chunks fit or exist—including when every chunked RAG is blocked as high risk—Emma uses the selected model as a general-purpose LLM. Responses are not required to contain grounding tags.
+
+ChromaDB persists its local index in `chroma_db/` by default. The embedding model is `paraphrase-multilingual-MiniLM-L12-v2`; configure `EMMA_VECTOR_DB_PATH`, `EMMA_EMBEDDING_MODEL`, `EMMA_VECTOR_TOP_K`, and `EMMA_VECTOR_MAX_DISTANCE` when needed. The first run must have the model available locally; `run.bat` starts subsequent runs in Hugging Face offline mode.
 
 The budget preserves source and chunk order and never splits a chunk. Set `EMMA_MAX_CONTEXT_CHARS` before startup to tune the limit for the context window of the local or external models in use. Invalid and non-positive values fall back to the default.
 
@@ -252,7 +250,8 @@ The budget preserves source and chunk order and never splits a chunk. Set `EMMA_
 
 1. Open `http://localhost:8650/ui/upload.html`.
 2. Drag and drop a `.txt` file.
-3. The server chunks the document and stores local JSON chunk files.
+3. The server chunks the document, creates embeddings, and stores the vectors in persistent ChromaDB.
+4. Administrators can rebuild the vector index with `POST /admin/rags/reindex`.
 4. The server checks the new document for likely prompt injection.
 5. The server checks for likely inconsistencies against visible RAGs.
 6. The document becomes available to chat if it is not marked `high` risk.
@@ -321,7 +320,7 @@ Sent to a configured external API, when selected:
 - Conversation context needed for the request
 - Visible safe RAG chunk content included in the final answer prompt, when safe chunks exist
 
-If no visible safe RAG chunks exist, final answer generation uses the selected local model or configured external API in general-chat mode without sending blocked RAG content and without a grounding tag.
+If no visible safe RAG chunks exist, final answer generation uses the selected local model or configured external API in general-chat mode without sending blocked RAG content.
 
 Use local models or external API keys appropriate for the sensitivity of your documents.
 
@@ -363,8 +362,8 @@ The tests mock provider calls and focus on backend behavior, permissions, tempor
 - Startup initialization uses FastAPI lifespan handlers.
 - RAG ingestion writes JSON chunks only.
 - Chat streaming is supported by both `ui/chat.html` and `ui/chat_evil_emma.html`.
-- Chat uses the general-purpose prompt when no visible safe chunks are available and removes any accidental grounding tag from that response.
-- Grounded RAG answers still require `[RAG]`, `[DRIFT]`, or `[NO INFO]`; general-mode answers are untagged.
+- Chat uses the general-purpose prompt when no visible safe chunks are available.
+- Grounded and general answers are returned without a required grounding-tag contract.
 - Audit log folders rotate at 500 files.
 
 ---
