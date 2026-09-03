@@ -10,7 +10,7 @@ When the request is to "update documentation", the expected scope in this projec
 - `ui/Docs.html`
 - `AGENTS.md`
 
-Keep these three documents aligned with the active Hybrid Emma behavior: LangChain-backed local models and external APIs, JSON-only RAG chunks, streaming chat, general untagged chat when no safe chunked RAG is active, RAG prompt-injection screening, audit logs, exception logs, and exclusion of high-risk RAGs from chat context.
+Keep these three documents aligned with the active Hybrid Emma behavior: LangChain-backed local models and external APIs, persistent ChromaDB RAG vectors, diagnostic JSON chunks, streaming chat, general and RAG answers without a required tag contract, RAG prompt-injection screening, audit logs, exception logs, and exclusion of high-risk RAGs from chat context.
 
 ## Project Summary
 
@@ -24,7 +24,7 @@ The original system implemented:
 - Static frontend in `ui/*.html`.
 - Main persistence in SQLite (`emma.db`).
 - Source RAG files in `files/`.
-- Chunks in `chunks/`.
+- Diagnostic chunks in `chunks/` and persistent vectors in `chroma_db/`.
 - Chat audit logs in `logs/chat_audit/`.
 - RAG security audit logs in `logs/rag_audit/`.
 - Unhandled exception logs in `logs/exception_log/`.
@@ -58,7 +58,7 @@ The rebuild goal is to keep endpoint behavior explicit while moving model calls 
   - Do not reintroduce routing prompts for "most relevant" files unless the RAG strategy changes again.
 
 - `chat_policy.py`
-  - Pure policies for RAG context budgeting and common-language detection.
+  - Pure policies for semantic RAG context budgeting and common-language detection.
   - Keep these policies independent from FastAPI and runtime persistence so they remain cheap to unit test.
 
 - `rag_security.py`
@@ -154,7 +154,7 @@ Recommended convention:
 
 Avoid prompt classes without real state.
 
-Current RAG strategy uses persistent ChromaDB semantic retrieval with configurable top-k and maximum distance. Retrieved safe chunks are admitted whole until the `EMMA_MAX_CONTEXT_CHARS` budget is reached. RAGs marked with `security.risk == "high"` are excluded from chat context. If no visible safe chunks are available, chat uses `build_general_prompt(...)` and the selected model as a general-purpose LLM.
+Current RAG strategy uses persistent ChromaDB semantic retrieval with configurable top-k and maximum distance. Retrieved safe chunks are admitted whole until the `EMMA_MAX_CONTEXT_CHARS` budget is reached. RAGs marked with `security.risk == "high"` are excluded from chat context. If no visible safe chunks are available, chat uses `build_general_prompt(...)` and the selected model as a general-purpose LLM. Answers do not require grounding tags.
 
 ### 4. Protect Visual State
 
@@ -236,7 +236,7 @@ Recommended workflow:
 
 Current automated tests:
 
-- `tests/test_chat_policy.py` covers ordered whole-chunk budgeting, safe environment-setting fallback, common-language detection, and localized deterministic replies.
+- `tests/test_chat_policy.py` covers whole-chunk budgeting, safe environment-setting fallback, common-language detection, and localized deterministic replies.
 - `tests/test_permissions.py` covers role restrictions for admin/file-management behavior.
 - `tests/test_rag_pipeline.py` covers chunk ingestion, file indexes, mocked inconsistency persistence, clean conflict checks, orphaned conflict pruning, chat prompt construction with visible safe chunks, and exclusion of high-risk RAGs from chat context.
 - `tests/test_core_endpoints.py` covers auth, forced temporary-password replacement, admin user management including username renames, conversation CRUD, file upload/list/download/delete, model catalog behavior, LangChain missing-dependency errors, and `/chat` streaming persistence.
@@ -256,7 +256,7 @@ Useful manual smoke tests after changes:
 - user management from admin;
 - chat creation, deletion, and recreation;
 - streaming chat responses appearing incrementally in `chat.html` and `chat_evil_emma.html`;
-- ask chat a question that requires multiple safe RAGs and confirm it answers from the ordered safe chunks admitted by the configured context budget;
+- ask chat a question that requires multiple safe RAGs and confirm it answers from semantically retrieved chunks admitted by the configured context budget;
 - index and conflict consistency when a file is deleted.
 
 ## Known Technical Debt
@@ -454,7 +454,7 @@ Current rebuild status:
 3. Conversation persistence: rebuilt.
 4. Local/external model selection: rebuilt using LangChain integrations.
 5. Upload, chunk ingestion, inconsistency detection, and RAG prompt-injection detection/auditing: rebuilt.
-6. Chat: rebuilt using bounded ordered visible safe chunks instead of relevance-based top-k retrieval, excludes high-risk RAGs from context, switches to general-model answers when no safe chunked RAG is active, does not impose grounding tags, and supports real LangChain streaming for streamed requests.
+6. Chat: uses bounded semantically retrieved visible safe chunks with configurable top-k/distance, excludes high-risk RAGs from context, switches to general-model answers when no safe chunked RAG is active, does not impose grounding tags, and supports real LangChain streaming for streamed requests.
 7. Tests: active and expected to pass.
 
 Likely next work:
