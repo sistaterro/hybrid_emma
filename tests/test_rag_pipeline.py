@@ -397,7 +397,7 @@ class RagPipelineTests(unittest.TestCase):
         async def fake_generate_ai_reply(_model, messages):
             """Return deterministic fake model output for tests."""
             captured["messages"] = messages
-            return "[RAG]\nThe visible RAGs contain conflicting discount rules."
+            return "The visible RAGs contain conflicting discount rules."
 
         original_resolve = self.server.resolve_model
         original_generate = self.server.generate_ai_reply
@@ -430,12 +430,12 @@ class RagPipelineTests(unittest.TestCase):
             )
 
             self.assertEqual(response.status_code, 200, response.text)
-            self.assertEqual(response.json()["tag"], "[RAG]")
+            self.assertNotIn("tag", response.json())
             prompt = captured["messages"][-1].content
             self.assertIn("CONTEXT:", prompt)
-            self.assertIn("SOURCE: mine/discounts#0000", prompt)
-            self.assertIn("SOURCE: mine/no_discounts#0000", prompt)
-            self.assertIn("fifty percent discount", prompt)
+            self.assertIn("SOURCE: user/discounts#", prompt)
+            self.assertIn("SOURCE: user/no_discounts#", prompt)
+            self.assertIn("fifty percent reduction", prompt)
             self.assertIn("There is no Monday meat discount", prompt)
             self.assertIn("QUESTION:\nDo we have Monday meat discounts?", prompt)
         finally:
@@ -471,7 +471,7 @@ class RagPipelineTests(unittest.TestCase):
                         }
                     )
                 return json.dumps({"has_any": False, "risk": "none", "summary": "", "matches": []})
-            return "[RAG]\nThe safe store policy says the Monday meat discount applies."
+            return "The safe store policy says the Monday meat discount applies."
 
         original_resolve = self.server.resolve_model
         original_generate = self.server.generate_ai_reply
@@ -506,9 +506,9 @@ class RagPipelineTests(unittest.TestCase):
 
             self.assertEqual(response.status_code, 200, response.text)
             prompt = captured["messages"][-1].content
-            self.assertIn("SOURCE: mine/discounts#0000", prompt)
-            self.assertIn("fifty percent discount", prompt)
-            self.assertNotIn("SOURCE: mine/injection#0000", prompt)
+            self.assertIn("SOURCE: user/discounts#", prompt)
+            self.assertIn("fifty percent reduction", prompt)
+            self.assertNotIn("SOURCE: user/injection#0000", prompt)
             self.assertNotIn("IGNORE ALL PREVIOUS INSTRUCTIONS", prompt)
             self.assertIn("BEGIN_UNTRUSTED_CONTEXT", prompt)
             self.assertIn("END_UNTRUSTED_CONTEXT", prompt)
@@ -575,7 +575,7 @@ class RagPipelineTests(unittest.TestCase):
             )
 
             self.assertEqual(response.status_code, 200, response.text)
-            self.assertIsNone(response.json()["tag"])
+            self.assertNotIn("tag", response.json())
             self.assertEqual(response.json()["message"]["content"], "Puedo responder con mi conocimiento general.")
             self.assertIn("general-purpose AI assistant", captured["prompt"])
             self.assertNotIn("IGNORE ALL PREVIOUS INSTRUCTIONS", captured["prompt"])

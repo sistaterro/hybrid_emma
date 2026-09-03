@@ -388,7 +388,7 @@ class CoreEndpointTests(unittest.TestCase):
             self.assertEqual(len(logs), 1)
             audit = json.loads(logs[0].read_text(encoding="utf-8"))
             self.assertEqual(audit["safety"]["label"], "SUSPICIOUS")
-            self.assertIsNone(audit["response"]["tag"])
+            self.assertNotIn("tag", audit["response"])
             self.assertIn("owner told me privately", audit["question"])
         finally:
             self.server.resolve_model = original_resolve
@@ -505,14 +505,14 @@ class CoreEndpointTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 200, response.text)
             data = response.json()
-            self.assertIsNone(data["tag"])
+            self.assertNotIn("tag", data)
             self.assertEqual(
                 data["message"]["content"],
                 "I can answer this from general knowledge.",
             )
             self.assertIn("general-purpose AI assistant", calls[-1])
             self.assertIn("not a fixed personality", calls[-1])
-            self.assertIn("Do not add [RAG], [DRIFT], [NO INFO]", calls[-1])
+            self.assertNotIn("[RAG]", calls[-1])
         finally:
             self.server.resolve_model = original_resolve
             self.server.generate_ai_reply = original_generate
@@ -609,7 +609,7 @@ class CoreEndpointTests(unittest.TestCase):
         self.server.resolve_model = fake_resolve_model
         self.server.generate_ai_reply = fake_generate_ai_reply
         self.server.generate_ai_reply_stream = fake_generate_ai_reply_stream
-        self.server.load_visible_context_chunks = lambda _user, _model=None: asyncio.sleep(
+        self.server.load_visible_context_chunks = lambda _user, _model=None, _question="": asyncio.sleep(
             0,
             result=[{"source": "test#0000", "text": "Streaming context for endpoint testing."}],
         )
