@@ -150,7 +150,8 @@
     </main>
   </div>
   <script>
-    const API_BASE_URL = `${location.protocol}//${location.hostname}:8650`;
+    const API_HOST = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'localhost' : location.hostname;
+    const API_BASE_URL = `http://${API_HOST}:8650`;
     const STORAGE_KEY = 'emma.settings';
     const detectionToggle = document.getElementById('manipulationDetection');
     const detectionModel = document.getElementById('detectionModel');
@@ -168,6 +169,36 @@
         manipulationDetection: detectionToggle.checked,
         detectionModel: detectionModel.value,
       }));
+    }
+
+    function renderModelOptions(models) {
+      const normalized = (models || []).map(model => typeof model === 'string' ? { id: model, label: model } : model);
+      const selected = localStorage.getItem(STORAGE_KEY) ? JSON.parse(localStorage.getItem(STORAGE_KEY)).detectionModel : '';
+      if (!normalized.length) {
+        detectionModel.innerHTML = '<option value="">No model configured</option>';
+        return;
+      }
+      detectionModel.innerHTML = normalized.map(model => {
+        const label = model.label || model.id;
+        const source = model.source_label || (model.source === 'external_apis' ? 'External APIs' : 'Local');
+        const provider = model.provider && model.provider !== 'local' ? ` / ${model.provider.toUpperCase()}` : '';
+        return `<option value="${escapeHtml(model.id)}">${escapeHtml(`${source}${provider} / ${label}`)}</option>`;
+      }).join('');
+      if (normalized.some(model => model.id === selected)) detectionModel.value = selected;
+      else detectionModel.value = normalized[0].id;
+      saveSettings();
+    }
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    async function loadModels() {
+      const token = localStorage.getItem('emma_token');
+      const response = await fetch(`${API_BASE_URL}/health`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) throw new Error('Could not load models');
+      const data = await response.json();
+      renderModelOptions(data?.models || []);
     }
 
     async function authorizeSettings() {
@@ -190,6 +221,7 @@
           return;
         }
         if (!response.ok) throw new Error('Settings authorization failed');
+        await loadModels();
       } catch (_) {
         window.location.href = '/ui/index.html';
       }
