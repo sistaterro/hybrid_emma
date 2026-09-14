@@ -92,6 +92,11 @@ LEGACY_API_KEY_FILES = {
 CONFLICT_CHECK_TASKS: set[str] = set()
 OLLAMA_PROBE_TIMEOUT = 0.75
 EXTERNAL_API_SOURCE_LABEL = "External APIs"
+NO_MODELS_ERROR = "No local or external AI models are available. Configure Ollama or an API provider before asking Emma to respond."
+
+
+class NoModelsAvailableError(RuntimeError):
+    """Raised when neither local nor external response models are configured."""
 
 MODEL_CATALOG = [
     {
@@ -259,6 +264,16 @@ def init_db() -> None:
     )
     conn.execute(
         """
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key         TEXT PRIMARY KEY,
+            value       TEXT NOT NULL,
+            updated_by  INTEGER,
+            updated_at  TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS sessions (
             token      TEXT PRIMARY KEY,
             user_id    INTEGER NOT NULL,
@@ -296,6 +311,16 @@ def init_db() -> None:
     ensure_column(conn, "users", "is_active", "INTEGER NOT NULL DEFAULT 1")
     ensure_column(conn, "users", "last_login_at", "TEXT")
     ensure_column(conn, "users", "must_change_password", "INTEGER NOT NULL DEFAULT 0")
+    conn.commit()
+
+    now = datetime.utcnow().isoformat()
+    conn.executemany(
+        "INSERT OR IGNORE INTO app_settings (key, value, updated_by, updated_at) VALUES (?, ?, NULL, ?)",
+        [
+            ("manipulation_detection_enabled", "true", now),
+            ("manipulation_detection_model", "auto", now),
+        ],
+    )
     conn.commit()
 
     count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
@@ -1274,6 +1299,14 @@ def available_models() -> list[dict]:
     return [*remote_models, *local_models()]
 
 
+def require_available_models() -> list[dict]:
+    """Return available response models or raise a clear configuration error."""
+    models = available_models()
+    if not models:
+        raise NoModelsAvailableError(NO_MODELS_ERROR)
+    return models
+
+
 def resolve_model(selection: str) -> dict:
     """Resolve a requested model id into a catalog entry."""
     catalog = [*MODEL_CATALOG, *local_models()]
@@ -1935,7 +1968,8 @@ async def health(user: dict = Depends(get_current_user)):
     """Return provider/model availability without exposing secrets."""
     models = available_models()
     return {
-        "status": "ok",
+        "status": "ok" if models else "degraded",
+        "error": None if models else NO_MODELS_ERROR,
         "models": models,
         "providers": sorted({model["provider"] for model in models}),
         "sources": sorted({model.get("source", "external_apis") for model in models}),
@@ -2287,6 +2321,10 @@ async def chat(
     user: dict = Depends(get_current_user),
 ):
     """Generate or stream a model reply for a chat request."""
+    try:
+        require_available_models()
+    except NoModelsAvailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     model = resolve_model(req.model)
     if not req.messages:
         raise HTTPException(status_code=400, detail="No messages to answer")
