@@ -531,6 +531,31 @@
       color: var(--text);
     }
 
+    .settings-link {
+      display: none;
+      position: fixed;
+      left: 24px;
+      bottom: 22px;
+      width: 38px;
+      height: 38px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      background: rgba(255,255,255,.86);
+      color: var(--text3);
+      font-size: 20px;
+      text-decoration: none;
+      box-shadow: var(--shadow-sm);
+      transition: color .2s, transform .2s, box-shadow .2s;
+    }
+
+    .settings-link:hover {
+      color: var(--blue);
+      transform: rotate(20deg);
+      box-shadow: var(--shadow);
+    }
+
     @media (max-width: 980px) {
       body {
         justify-content: flex-start;
@@ -643,6 +668,8 @@
     </a>
   </div>
 
+  <a class="settings-link" id="settings-link" href="settings.html" title="Settings" aria-label="Settings">⚙</a>
+
   <div class="page-footer">
     <span>Emma v2.0 · Private AI</span>
     <div class="user-pill">
@@ -678,6 +705,7 @@
       }
       if (user.role === 'admin') {
         document.getElementById('card-admin').style.display = 'flex';
+        document.getElementById('settings-link').style.display = 'flex';
       }
     }
 

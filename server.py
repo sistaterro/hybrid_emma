@@ -2067,6 +2067,13 @@ async def reindex_rags(user: dict = Depends(get_current_user)):
     return {"status": "ok" if not failures else "partial", "processed": processed, "failures": failures}
 
 
+@app.get("/admin/settings/access")
+async def settings_access(user: dict = Depends(get_current_user)):
+    """Authorize access to the future administrative settings surface."""
+    require_admin(user)
+    return {"status": "ok", "user_id": user["id"], "role": user["role"]}
+
+
 @app.delete("/files/{scope}/{stem}")
 async def delete_file(
     scope: str,

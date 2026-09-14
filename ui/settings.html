@@ -150,6 +150,7 @@
     </main>
   </div>
   <script>
+    const API_BASE_URL = `${location.protocol}//${location.hostname}:8650`;
     const STORAGE_KEY = 'emma.settings';
     const detectionToggle = document.getElementById('manipulationDetection');
     const detectionModel = document.getElementById('detectionModel');
@@ -169,9 +170,35 @@
       }));
     }
 
+    async function authorizeSettings() {
+      const token = localStorage.getItem('emma_token');
+      if (!token) {
+        window.location.href = '/ui/login.html';
+        return;
+      }
+      try {
+        const response = await fetch(`${API_BASE_URL}/admin/settings/access`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.status === 401) {
+          localStorage.removeItem('emma_token');
+          window.location.href = '/ui/login.html';
+          return;
+        }
+        if (response.status === 403) {
+          window.location.href = '/ui/index.html';
+          return;
+        }
+        if (!response.ok) throw new Error('Settings authorization failed');
+      } catch (_) {
+        window.location.href = '/ui/index.html';
+      }
+    }
+
     detectionToggle.addEventListener('change', saveSettings);
     detectionModel.addEventListener('change', saveSettings);
     loadSettings();
+    authorizeSettings();
   </script>
 </body>
 </html>
