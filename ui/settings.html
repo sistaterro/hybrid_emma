@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emma · Settings</title>
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --surface: #ffffff;
+      --border: rgba(0, 0, 0, 0.08);
+      --text: #1d1d1f;
+      --text2: #86868b;
+      --blue: #0071e3;
+      --sidebar-w: 240px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { min-height: 100%; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #app { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
+
+    #sidebar {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      background: rgba(255, 255, 255, 0.8);
+      border-right: 1px solid var(--border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .hal-eye { position: relative; width: 36px; height: 36px; flex: 0 0 auto; }
+    .hal-eye::before, .hal-eye::after { content: ''; position: absolute; inset: 0; border: 1px solid rgba(0,113,227,.18); border-radius: 50%; }
+    .hal-eye::after { inset: 6px; border-color: rgba(0,113,227,.1); }
+    .hal-lens { position: absolute; inset: 11px; border-radius: 50%; background: #0071e3; box-shadow: 0 0 14px rgba(0,113,227,.4); }
+
+    main { padding: 48px; }
+
+    .page-header {
+      max-width: 900px;
+      margin: 0 auto 28px;
+    }
+
+    h1 { font-size: 32px; font-weight: 650; letter-spacing: -0.02em; }
+
+    .placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      max-width: 900px;
+      min-height: 360px;
+      margin: 0 auto;
+      border: 1px dashed rgba(0, 113, 227, 0.25);
+      border-radius: 16px;
+      background: var(--surface);
+      color: var(--text2);
+      text-align: center;
+    }
+
+    @media (max-width: 720px) {
+      #app { display: block; }
+      #sidebar { min-height: auto; }
+      main { padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <a class="brand" href="/ui/index.html" title="Home" aria-label="Return to Home">
+        <span class="hal-eye" aria-hidden="true"><span class="hal-lens"></span></span>
+        <span>Settings</span>
+      </a>
+    </aside>
+
+    <main>
+      <div class="page-header">
+        <h1>Settings</h1>
+      </div>
+      <section class="placeholder" aria-label="Settings placeholder">
+        <p>Settings will be available here.</p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
