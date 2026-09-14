@@ -12,6 +12,8 @@
       --text: #1d1d1f;
       --text2: #86868b;
       --blue: #0071e3;
+      --blue-light: #e8f1fb;
+      --green: #34c759;
       --sidebar-w: 240px;
     }
 
@@ -61,18 +63,44 @@
 
     h1 { font-size: 32px; font-weight: 650; letter-spacing: -0.02em; }
 
-    .placeholder {
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .settings-card {
       max-width: 900px;
-      min-height: 360px;
       margin: 0 auto;
-      border: 1px dashed rgba(0, 113, 227, 0.25);
+      padding: 28px;
       border-radius: 16px;
       background: var(--surface);
-      color: var(--text2);
-      text-align: center;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 16px rgba(0,0,0,.05);
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .setting-row:last-child { border-bottom: 0; padding-bottom: 0; }
+    .setting-title { font-weight: 600; }
+    .setting-description { margin-top: 4px; color: var(--text2); font-size: 13px; }
+
+    .switch { position: relative; width: 48px; height: 28px; flex: 0 0 auto; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; cursor: pointer; border-radius: 999px; background: #d2d2d7; transition: .2s; }
+    .slider::before { content: ''; position: absolute; width: 22px; height: 22px; left: 3px; top: 3px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: .2s; }
+    .switch input:checked + .slider { background: var(--green); }
+    .switch input:checked + .slider::before { transform: translateX(20px); }
+
+    select {
+      min-width: 220px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: white;
+      color: var(--text);
+      font: inherit;
     }
 
     @media (max-width: 720px) {
@@ -95,10 +123,55 @@
       <div class="page-header">
         <h1>Settings</h1>
       </div>
-      <section class="placeholder" aria-label="Settings placeholder">
-        <p>Settings will be available here.</p>
+      <section class="settings-card" aria-label="Emma settings">
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Manipulation detection</div>
+            <div class="setting-description">Analyze user messages for pressure, bypass attempts, and social engineering.</div>
+          </div>
+          <label class="switch" aria-label="Enable manipulation detection">
+            <input id="manipulationDetection" type="checkbox" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Detection model</div>
+            <div class="setting-description">Model used to evaluate possible manipulation before answering.</div>
+          </div>
+          <select id="detectionModel" aria-label="Detection model">
+            <option value="default">Default model</option>
+            <option value="qwen3.5:9b">qwen3.5:9b</option>
+            <option value="qwen2.5:7b">qwen2.5:7b</option>
+          </select>
+        </div>
       </section>
     </main>
   </div>
+  <script>
+    const STORAGE_KEY = 'emma.settings';
+    const detectionToggle = document.getElementById('manipulationDetection');
+    const detectionModel = document.getElementById('detectionModel');
+
+    function loadSettings() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        if (typeof saved.manipulationDetection === 'boolean') detectionToggle.checked = saved.manipulationDetection;
+        if (saved.detectionModel) detectionModel.value = saved.detectionModel;
+      } catch (_) { /* Use defaults when local settings are unavailable. */ }
+    }
+
+    function saveSettings() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        manipulationDetection: detectionToggle.checked,
+        detectionModel: detectionModel.value,
+      }));
+    }
+
+    detectionToggle.addEventListener('change', saveSettings);
+    detectionModel.addEventListener('change', saveSettings);
+    loadSettings();
+  </script>
 </body>
 </html>
