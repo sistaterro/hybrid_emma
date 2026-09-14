@@ -47,6 +47,14 @@ When active safe RAG chunks are used, the model receives the retrieved context a
 
 When no visible safe RAG has generated usable chunks, Emma switches to general chat. Her voice remains warm and professional, with natural feminine self-reference where the language requires it; examples such as "surprised", "tired", or "informed" describe grammatical agreement, not a fixed emotional personality.
 
+## Administration settings
+
+Administrators can open `ui/settings.html` from the gear on the home screen. The settings are stored in SQLite in the `app_settings` table and are also enforced by the backend through `GET /admin/settings` and `PUT /admin/settings`.
+
+The manipulation-detection switch controls the complete user-message safety analysis that runs before response generation. When enabled, Emma uses the selected local or external model (or `auto`) to classify possible manipulation and keeps the existing audit behavior. When disabled, that analysis is skipped and chat continues normally without requiring a safety-model call. The setting does not disable RAG prompt-injection screening during ingestion or high-risk RAG exclusion.
+
+On first run, manipulation detection defaults to enabled and its model to `auto`. If no local or external models are available, `/health` reports a degraded status and `/chat` returns a clear 503 error until a model is configured.
+
 ---
 
 ## RAG Safety Model

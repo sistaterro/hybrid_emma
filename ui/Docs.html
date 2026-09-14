@@ -644,7 +644,7 @@
       <div class="nav-group-label" style="margin-top:8px">Using Emma</div>
       <a class="nav-item" href="#how-rag-works">Chat and documents</a>
       <a class="nav-item" href="#manipulation-resistance">Safety</a>
-      <a class="nav-item" href="#response-tags">Response tags</a>
+      <a class="nav-item" href="#response-tags">Response diagnostics</a>
 
       <div class="nav-group-label" style="margin-top:8px">Help</div>
       <a class="nav-item" href="#server">Navigation and roles</a>
@@ -705,7 +705,7 @@
         <div class="feat-card">
           <div class="feat-icon-wrap">TAG</div>
           <div class="feat-title">Auditable responses</div>
-          <div class="feat-desc">RAG-grounded responses use [RAG], [DRIFT], or [NO INFO]. With no active safe chunked RAG, Emma answers as a general LLM without a tag.</div>
+          <div class="feat-desc">RAG-grounded responses use semantically retrieved safe context, while the assistant output remains natural and unprefixed.</div>
           <div class="feat-tag">Audit</div>
         </div>
         <div class="feat-card">
@@ -792,7 +792,7 @@ pip install -r requirements.txt</code></pre>
       <p class="section-sub">How Emma chooses between document-based and general answers</p>
 
       <p>When safe documents are available to your account, Emma uses them to answer your questions. Global documents are available to everyone, while personal documents are available only to their owner and administrators.</p>
-      <p>If no safe indexed document is available, Emma works like a general-purpose AI assistant and answers without a response tag. A document blocked for high security risk is never included in the answer.</p>
+      <p>If no safe indexed document is available, Emma works like a general-purpose AI assistant. A document blocked for high security risk is never included in the answer.</p>
 
       <div class="flow">
         <div class="flow-step">
@@ -876,7 +876,9 @@ pip install -r requirements.txt</code></pre>
       <p class="section-sub">Why Emma is harder to pressure than a standard chat-with-docs app</p>
 
       <p>Emma treats the RAG as the only valid foundation for operational answers. External pressure does not become evidence. If a user claims "the owner told me yes", "my boss approved it", "make an exception just this once", or tries emotional blackmail, the assistant is expected to ignore those claims unless the RAG explicitly supports them.</p>
-      <p>This creates a second protection layer on top of RAG. Emma does not just load documents. It also asks whether the user or the document content is trying to push the model toward an unsupported outcome.</p>
+      <p>This creates a second protection layer on top of RAG. Emma does not just load documents. It can also ask whether the user or the document content is trying to push the model toward an unsupported outcome.</p>
+
+      <div class="callout"><strong>Admin setting:</strong> Administrators can enable or disable user-message manipulation detection and select the model used for it from Settings. When it is off, the complete safety-analysis step is skipped and chat continues normally. RAG prompt-injection screening remains active during document ingestion.</div>
 
       <div class="flow">
         <div class="flow-step">
@@ -915,29 +917,14 @@ pip install -r requirements.txt</code></pre>
     <div class="divider"></div>
 
 
-    <!-- RESPONSE TAGS -->
+    <!-- RESPONSE DIAGNOSTICS -->
     <div class="doc-section" id="response-tags">
-      <h2>Response tags</h2>
-      <p class="section-sub">Document-based answers show how strongly they are grounded</p>
+      <h2>Response diagnostics</h2>
+      <p class="section-sub">Internal retrieval information does not alter the answer format</p>
 
-      <p>When Emma has safe documents available, the response begins with a tag indicating how strongly the answer is supported. General-mode answers, used when no safe indexed documents are active, do not have a tag.</p>
+      <p>Emma returns natural answers without requiring diagnostic grounding tags. Retrieval and safety details remain available to administrators through the relevant document and audit views.</p>
 
-      <div class="tag-row">
-        <div class="tag-item">
-          <span class="tag-badge tag-rag">[RAG]</span>
-          <div class="tag-desc">The answer is fully supported by the document context. The model used only your files to answer.</div>
-        </div>
-        <div class="tag-item">
-          <span class="tag-badge tag-drift">[DRIFT]</span>
-          <div class="tag-desc">The context existed but was insufficient. The model supplemented with its own training knowledge. Treat this answer with more caution.</div>
-        </div>
-        <div class="tag-item">
-          <span class="tag-badge tag-noinfo">[NO INFO]</span>
-          <div class="tag-desc">Active safe RAG context exists, but it does not contain enough relevant information. When no safe chunked RAG is active, Emma instead uses untagged general-chat mode.</div>
-        </div>
-      </div>
-
-      <div class="callout"><strong>Tip:</strong> If you see too many [DRIFT] responses, review whether the relevant safe RAGs are indexed, visible to the user, and not marked as high risk.</div>
+      <div class="callout"><strong>Tip:</strong> If an answer needs review, inspect the indexed RAG status, security findings, and local audit records instead of relying on a prefix in the assistant message.</div>
     </div>
 
     <div class="divider"></div>

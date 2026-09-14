@@ -209,6 +209,12 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
 
 
+class AdminSettingsUpdate(BaseModel):
+    """Request body for updating administrative runtime settings."""
+    manipulation_detection_enabled: bool
+    manipulation_detection_model: str
+
+
 def hash_password(password: str) -> str:
     """Hash a plaintext password for SQLite storage."""
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -225,6 +231,30 @@ def get_db():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def get_app_settings() -> dict[str, str]:
+    """Read persisted application settings with safe defaults."""
+    conn = get_db()
+    rows = conn.execute("SELECT key, value FROM app_settings").fetchall()
+    conn.close()
+    settings = {row["key"]: row["value"] for row in rows}
+    settings.setdefault("manipulation_detection_enabled", "true")
+    settings.setdefault("manipulation_detection_model", "auto")
+    return settings
+
+
+def save_app_settings(values: dict[str, str], user_id: int) -> None:
+    """Persist application settings changed by an administrator."""
+    conn = get_db()
+    now = datetime.utcnow().isoformat()
+    conn.executemany(
+        "INSERT INTO app_settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_by=excluded.updated_by, updated_at=excluded.updated_at",
+        [(key, value, user_id, now) for key, value in values.items()],
+    )
+    conn.commit()
+    conn.close()
 
 
 def normalize_role(role: str) -> str:
@@ -2108,6 +2138,36 @@ async def settings_access(user: dict = Depends(get_current_user)):
     return {"status": "ok", "user_id": user["id"], "role": user["role"]}
 
 
+@app.get("/admin/settings")
+async def read_admin_settings(user: dict = Depends(get_current_user)):
+    """Return administrative runtime settings without exposing secrets."""
+    require_admin(user)
+    settings = get_app_settings()
+    return {
+        "manipulation_detection_enabled": settings["manipulation_detection_enabled"] == "true",
+        "manipulation_detection_model": settings["manipulation_detection_model"],
+    }
+
+
+@app.put("/admin/settings")
+async def update_admin_settings(payload: AdminSettingsUpdate, user: dict = Depends(get_current_user)):
+    """Validate and persist administrative runtime settings."""
+    require_admin(user)
+    model_id = payload.manipulation_detection_model.strip()
+    if model_id != "auto":
+        available = {model["id"] for model in available_models()}
+        if model_id not in available:
+            raise HTTPException(status_code=400, detail="Selected manipulation detection model is unavailable")
+    save_app_settings(
+        {
+            "manipulation_detection_enabled": "true" if payload.manipulation_detection_enabled else "false",
+            "manipulation_detection_model": model_id or "auto",
+        },
+        user["id"],
+    )
+    return await read_admin_settings(user)
+
+
 @app.delete("/files/{scope}/{stem}")
 async def delete_file(
     scope: str,
@@ -2322,10 +2382,11 @@ async def chat(
 ):
     """Generate or stream a model reply for a chat request."""
     try:
-        require_available_models()
-    except NoModelsAvailableError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    model = resolve_model(req.model)
+        model = resolve_model(req.model)
+    except HTTPException as exc:
+        if not available_models():
+            raise HTTPException(status_code=503, detail=NO_MODELS_ERROR) from exc
+        raise
     if not req.messages:
         raise HTTPException(status_code=400, detail="No messages to answer")
     question = req.messages[-1].content.strip()
@@ -2333,7 +2394,18 @@ async def chat(
         raise HTTPException(status_code=400, detail="The last message is empty")
 
     context_chunks = await load_visible_context_chunks(user, model, question)
-    safety = await analyze_user_message_safety(question, model)
+    settings = get_app_settings()
+    if settings.get("manipulation_detection_enabled", "true") == "true":
+        safety_model = model
+        configured_model = settings.get("manipulation_detection_model", "auto")
+        if configured_model != "auto":
+            try:
+                safety_model = resolve_model(configured_model)
+            except HTTPException:
+                safety_model = model
+        safety = await analyze_user_message_safety(question, safety_model)
+    else:
+        safety = default_safety_assessment()
     ai_messages = build_chat_messages_with_visible_context(req, context_chunks)
     audit_record = build_chat_audit_record(req, user, model, question, safety, context_chunks)
 

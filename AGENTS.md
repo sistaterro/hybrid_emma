@@ -198,6 +198,8 @@ Practical rule:
 - Chat must not use RAG chunks whose prompt-injection security result is `high`. `visible_chat_chunk_sources(...)` is responsible for filtering them out, and it creates a missing security assessment lazily before a RAG can be used.
 - Chat must use the general-purpose model prompt when no visible safe chunked RAG is active, including when all chunked RAGs are excluded as high risk. Do not expose blocked RAG text to that prompt.
 - Chat answers are not required to contain grounding tags. The backend must preserve model output naturally in both general and RAG modes.
+- Manipulation detection is controlled by the admin-only `app_settings` records `manipulation_detection_enabled` and `manipulation_detection_model`, exposed through `GET/PUT /admin/settings`. When disabled, `/chat` must skip the complete user-message safety-analysis call and continue with normal response generation. The configured model may be `auto` or an available catalog model.
+- First-run settings default to manipulation detection enabled with model `auto`. If the local and external model catalog is empty, `/health` reports degraded status and `/chat` must return an actionable 503 instead of waiting indefinitely.
 - `/files` is responsible for surfacing persisted conflict state and scheduling missing checks for indexed RAGs that have no conflict record yet.
 - `/files` also surfaces persisted `security` state for prompt-injection findings.
 - When deleting RAGs, prune both direct `conflicts_index.json` entries and orphaned `matches` that reference deleted files.
@@ -208,7 +210,7 @@ Practical rule:
 - Suspicious RAG ingestion writes JSON audit files in `logs/rag_audit/`.
 - Unhandled HTTP exceptions and selected background task exceptions write JSON records in `logs/exception_log/`.
 - `logs/chat_audit/`, `logs/rag_audit/`, and `logs/exception_log/` rotate at 500 files, deleting the oldest batch when the limit is reached.
-- Audit logs should never include API keys; keep chat records focused on user/message metadata, safety assessment, RAG context summary, and response tag/length. RAG and exception logs may include file paths, excerpts, stack traces, and context needed for debugging, but must still avoid secrets where possible.
+- Audit logs should never include API keys; keep chat records focused on user/message metadata, safety assessment, RAG context summary, and response length. RAG and exception logs may include file paths, excerpts, stack traces, and context needed for debugging, but must still avoid secrets where possible.
 
 ## UX And Frontend
 

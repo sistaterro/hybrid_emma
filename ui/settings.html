@@ -155,6 +155,7 @@
     const STORAGE_KEY = 'emma.settings';
     const detectionToggle = document.getElementById('manipulationDetection');
     const detectionModel = document.getElementById('detectionModel');
+    let settingsAuthorized = false;
 
     function loadSettings() {
       try {
@@ -164,20 +165,41 @@
       } catch (_) { /* Use defaults when local settings are unavailable. */ }
     }
 
+    function savedSettings() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      } catch (_) {
+        return {};
+      }
+    }
+
     function saveSettings() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      const values = {
         manipulationDetection: detectionToggle.checked,
         detectionModel: detectionModel.value,
-      }));
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
+      if (settingsAuthorized && detectionModel.value) {
+        fetch(`${API_BASE_URL}/admin/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('emma_token')}` },
+          body: JSON.stringify({
+            manipulation_detection_enabled: detectionToggle.checked,
+            manipulation_detection_model: detectionModel.value,
+          }),
+        }).catch(() => {});
+      }
     }
 
     function renderModelOptions(models) {
       const normalized = (models || []).map(model => typeof model === 'string' ? { id: model, label: model } : model);
-      const selected = localStorage.getItem(STORAGE_KEY) ? JSON.parse(localStorage.getItem(STORAGE_KEY)).detectionModel : '';
+      const selected = savedSettings().detectionModel;
       if (!normalized.length) {
         detectionModel.innerHTML = '<option value="">No model configured</option>';
+        detectionModel.disabled = true;
         return;
       }
+      detectionModel.disabled = false;
       detectionModel.innerHTML = normalized.map(model => {
         const label = model.label || model.id;
         const source = model.source_label || (model.source === 'external_apis' ? 'External APIs' : 'Local');
@@ -201,6 +223,18 @@
       renderModelOptions(data?.models || []);
     }
 
+    async function loadRemoteSettings() {
+      const token = localStorage.getItem('emma_token');
+      const response = await fetch(`${API_BASE_URL}/admin/settings`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) throw new Error('Could not load settings');
+      const data = await response.json();
+      detectionToggle.checked = data.manipulation_detection_enabled;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        manipulationDetection: data.manipulation_detection_enabled,
+        detectionModel: data.manipulation_detection_model,
+      }));
+    }
+
     async function authorizeSettings() {
       const token = localStorage.getItem('emma_token');
       if (!token) {
@@ -221,6 +255,8 @@
           return;
         }
         if (!response.ok) throw new Error('Settings authorization failed');
+        await loadRemoteSettings();
+        settingsAuthorized = true;
         await loadModels();
       } catch (_) {
         window.location.href = '/ui/index.html';
